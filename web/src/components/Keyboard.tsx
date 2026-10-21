@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { IS_LIGHT } from '../lib/device'
 import { NOTES } from '../lib/notes'
 
 type Spark = { x: number; y: number; vx: number; vy: number; life: number; color: string; size: number }
@@ -10,51 +11,61 @@ export function Keyboard({ onPress, disabled }: { onPress: (code: number) => voi
   const sparks = useRef<Spark[]>([])
   const wrap = useRef<HTMLDivElement>(null)
 
+  const raf = useRef(0)
+
   useEffect(() => {
     const el = canvas.current!
-    const ctx = el.getContext('2d')!
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
-    let raf = 0
     const resize = () => {
       el.width = el.clientWidth * dpr
       el.height = el.clientHeight * dpr
     }
     resize()
     window.addEventListener('resize', resize)
-    const tick = () => {
-      ctx.clearRect(0, 0, el.width, el.height)
-      sparks.current = sparks.current.filter((s) => s.life > 0)
-      for (const s of sparks.current) {
-        s.x += s.vx
-        s.y += s.vy
-        s.vy += 0.06
-        s.life -= 0.018
-        ctx.globalAlpha = Math.max(s.life, 0)
-        ctx.fillStyle = s.color
-        ctx.shadowColor = s.color
-        ctx.shadowBlur = 12 * dpr
-        ctx.beginPath()
-        ctx.arc(s.x * dpr, s.y * dpr, Math.max(0, s.size * dpr * s.life), 0, Math.PI * 2)
-        ctx.fill()
-      }
-      raf = requestAnimationFrame(tick)
-    }
-    tick()
     return () => {
-      cancelAnimationFrame(raf)
+      cancelAnimationFrame(raf.current)
+      raf.current = 0
       window.removeEventListener('resize', resize)
     }
   }, [])
+
+  // The spark loop only runs while there are sparks alive, so an idle keyboard costs nothing.
+  const tick = () => {
+    const el = canvas.current
+    if (!el) return
+    const ctx = el.getContext('2d')!
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    ctx.clearRect(0, 0, el.width, el.height)
+    sparks.current = sparks.current.filter((s) => s.life > 0)
+    for (const s of sparks.current) {
+      s.x += s.vx
+      s.y += s.vy
+      s.vy += 0.06
+      s.life -= 0.018
+      ctx.globalAlpha = Math.max(s.life, 0)
+      ctx.fillStyle = s.color
+      if (!IS_LIGHT) {
+        ctx.shadowColor = s.color
+        ctx.shadowBlur = 12 * dpr
+      }
+      ctx.beginPath()
+      ctx.arc(s.x * dpr, s.y * dpr, Math.max(0, s.size * dpr * s.life), 0, Math.PI * 2)
+      ctx.fill()
+    }
+    raf.current = sparks.current.length ? requestAnimationFrame(tick) : 0
+  }
 
   const burst = (clientX: number, clientY: number, color: string) => {
     const rect = wrap.current!.getBoundingClientRect()
     const x = clientX - rect.left
     const y = clientY - rect.top
-    for (let i = 0; i < 16; i++) {
+    const count = IS_LIGHT ? 7 : 16
+    for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2
       const v = Math.random() * 3.2 + 1
-      sparks.current.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 2.4, life: 1, color, size: Math.random() * 3 + 1.5 })
+      sparks.current.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 2.4, life: 1, color, size: Math.random() * 3 + (IS_LIGHT ? 2.5 : 1.5) })
     }
+    if (!raf.current) raf.current = requestAnimationFrame(tick)
   }
 
   const press = (code: number, e: React.PointerEvent) => {

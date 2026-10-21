@@ -1,11 +1,17 @@
 import { useEffect, useRef } from 'react'
+import { IS_LIGHT } from '../lib/device'
 import { NOTES } from '../lib/notes'
 
-/** Ambient background: slow color blobs plus drifting "note dust" on a canvas. */
+/**
+ * Ambient background: slow color blobs plus drifting "note dust" on a canvas.
+ * On phones (IS_LIGHT) the canvas and the animated blurs are dropped: they alone
+ * halved the frame rate and starved the audio thread.
+ */
 export function Aurora({ intensity = 1 }: { intensity?: number }) {
   const canvas = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
+    if (IS_LIGHT) return
     const el = canvas.current!
     const ctx = el.getContext('2d')!
     let frame = 0
@@ -26,6 +32,8 @@ export function Aurora({ intensity = 1 }: { intensity?: number }) {
     resize()
     window.addEventListener('resize', resize)
     const draw = () => {
+      raf = requestAnimationFrame(draw)
+      if (document.hidden) return
       frame++
       ctx.clearRect(0, 0, el.width, el.height)
       for (const p of particles) {
@@ -43,7 +51,6 @@ export function Aurora({ intensity = 1 }: { intensity?: number }) {
         ctx.arc(p.x * el.width, p.y * el.height, p.r * dpr, 0, Math.PI * 2)
         ctx.fill()
       }
-      raf = requestAnimationFrame(draw)
     }
     draw()
     return () => {
@@ -51,6 +58,20 @@ export function Aurora({ intensity = 1 }: { intensity?: number }) {
       window.removeEventListener('resize', resize)
     }
   }, [intensity])
+
+  if (IS_LIGHT) {
+    // Two static radial gradients: same mood, zero per-frame cost.
+    return (
+      <div
+        className="pointer-events-none fixed inset-0 noise"
+        aria-hidden
+        style={{
+          background:
+            'radial-gradient(60% 45% at 10% 0%, rgba(77,124,255,.32), transparent 70%), radial-gradient(70% 50% at 100% 100%, rgba(255,79,216,.26), transparent 70%)',
+        }}
+      />
+    )
+  }
 
   return (
     <div className="pointer-events-none fixed inset-0 overflow-hidden noise" aria-hidden>

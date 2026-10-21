@@ -1,3 +1,4 @@
+import { IS_LIGHT } from '../lib/device'
 import { MAX_DURATION_MS, NOTES, type NoteEvent } from '../lib/notes'
 
 type Props = {
@@ -65,7 +66,7 @@ export function PianoRoll({ notes, durationMs, playhead, activeIndex, height = 1
             rx={rowH * 0.32}
             fill={color}
             opacity={activeIndex == null || on || (activeIndex ?? -1) > i ? 1 : 0.35}
-            filter="url(#roll-glow)"
+            filter={IS_LIGHT ? undefined : 'url(#roll-glow)'}
             style={{ transition: 'opacity .2s', transform: on ? 'scaleY(1.25)' : undefined, transformOrigin: 'center', transformBox: 'fill-box' }}
           />
         )

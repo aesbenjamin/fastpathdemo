@@ -124,9 +124,10 @@ function Intro({ name, setName, onStart }: { name: string; setName: (v: string) 
   const ok = name.trim().length >= 2
   return (
     <div className="flex flex-1 flex-col justify-between gap-10 py-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <Neo4jLogo size="sm" />
+        <span className="h-5 w-px bg-white/15" />
         <Logo size="sm" />
-        <Neo4jLogo size="sm" className="text-white/80" />
       </div>
       <div className="space-y-6">
         <motion.h1
