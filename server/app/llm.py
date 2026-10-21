@@ -71,8 +71,11 @@ _TAG_NAMES = {
 
 def name_tribes(tribes: list[dict]) -> dict[str, dict]:
     result = chat_json(
-        "Dê um nome criativo (2 a 4 palavras) e uma descrição de uma frase para cada tribo musical, "
+        "Dê um nome criativo (2 a 3 palavras) e uma descrição de uma frase curta para cada tribo musical, "
         "baseado nas estatísticas. Nomes devem ser distintos entre si. "
+        "Compare as tribos entre si: 'rápida' só vale para quem tem notesPerSecond acima da média do conjunto, "
+        "'lenta' ou 'contemplativa' para quem está abaixo. Destaque o que diferencia cada tribo das outras, "
+        "e não repita a mesma característica em todas. "
         'Responda: {"tribes": [{"id": "...", "name": "...", "description": "..."}]}',
         {"tribes": [{"id": t["id"], **t["facts"]} for t in tribes]},
     )

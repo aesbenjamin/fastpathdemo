@@ -1,5 +1,5 @@
 .DS_Store
-credentials.txt
+credentials*.txt
 token_github.txt
 .local/
 
