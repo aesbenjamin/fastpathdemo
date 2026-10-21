@@ -7,7 +7,11 @@ import unicodedata
 
 from . import db, llm
 
-HUMAN = "NOT p.isBot AND NOT coalesce(p.isGenerated, false)"
+# By default only people count; $incluir_robos opens the queries to the echo bots and AI compositions.
+HUMAN = "($incluir_robos OR (NOT p.isBot AND NOT coalesce(p.isGenerated, false)))"
+HUMAN_Q = HUMAN.replace("p.", "q.")
+HUMAN_O = HUMAN.replace("p.", "o.")
+INCLUDE_BOTS = re.compile(r"\b(ecos?|rob[oô]s?|bots?|m[aá]quinas?|ias?|todos|todas|todo mundo|geral)\b")
 
 CATALOG = {
     "mais_original": {
@@ -23,7 +27,7 @@ CATALOG = {
         "params": [],
         "cypher": f"""
             MATCH (p:Performance)-[s:SIMILAR_TO {{mode: 'full'}}]->(q:Performance)
-            WHERE {HUMAN} AND NOT q.isBot AND NOT coalesce(q.isGenerated, false) AND p.id < q.id
+            WHERE {HUMAN} AND {HUMAN_Q} AND p.id < q.id
             RETURN p.name AS pessoa1, q.name AS pessoa2, s.cosine AS cosseno, s.euclidean AS euclidiana, s.score AS score
             ORDER BY score DESC LIMIT 3""",
     },
@@ -39,9 +43,9 @@ CATALOG = {
     "tribo_de": {
         "description": "Em qual tribo uma pessoa caiu e quem mais está nela",
         "params": ["nome"],
-        "cypher": """
-            MATCH (p:Performance)-[:IN_TRIBE {mode: 'full'}]->(t:Tribe) WHERE toLower(p.name) CONTAINS toLower($nome)
-            OPTIONAL MATCH (o:Performance)-[:IN_TRIBE {mode: 'full'}]->(t) WHERE o <> p AND NOT o.isBot
+        "cypher": f"""
+            MATCH (p:Performance)-[:IN_TRIBE {{mode: 'full'}}]->(t:Tribe) WHERE toLower(p.name) CONTAINS toLower($nome)
+            OPTIONAL MATCH (o:Performance)-[:IN_TRIBE {{mode: 'full'}}]->(t) WHERE o <> p AND {HUMAN_O}
             RETURN p.name AS pessoa, t.name AS tribo, t.description AS descricao, collect(o.name)[0..8] AS colegas""",
     },
     "resumo_tribos": {
@@ -65,7 +69,7 @@ CATALOG = {
         "description": "Quem tocou mais rápido e quem tocou mais devagar",
         "params": [],
         "cypher": f"""
-            MATCH (p:Performance) WHERE {HUMAN}
+            MATCH (p:Performance) WHERE {HUMAN} AND p.notesPerSecond IS NOT NULL
             WITH p ORDER BY p.notesPerSecond DESC
             WITH collect(p {{.name, .notesPerSecond, .noteCount}}) AS ps
             RETURN ps[0..3] AS mais_rapidos, reverse(ps)[0..3] AS mais_lentos""",
@@ -141,21 +145,26 @@ def ask(question: str) -> dict:
     catalog = {k: {"description": v["description"], "params": v["params"]} for k, v in CATALOG.items()}
     routed = llm.chat_json(
         "Escolha a consulta do catálogo que responde à pergunta e extraia os parâmetros (nomes de pessoas como "
-        'aparecem na pergunta). Responda: {"queryId": "...", "params": {...}}',
+        "aparecem na pergunta). Por padrão as consultas olham só os humanos; se a pergunta pedir para considerar "
+        "também os ecos/robôs/bots/melodias da IA ou 'todo mundo', inclua \"incluir_robos\": true nos params. "
+        'Responda: {"queryId": "...", "params": {...}}',
         {"pergunta": question, "catalogo": catalog},
         temperature=0,
     )
     query_id, params = (routed or {}).get("queryId"), (routed or {}).get("params") or {}
+    include_bots = bool(params.get("incluir_robos")) or bool(INCLUDE_BOTS.search(_plain(question)))
     if query_id not in CATALOG:
         query_id, params = _route_by_keywords(question)
     spec = CATALOG[query_id]
     params = {p: str(params.get(p, "")) for p in spec["params"]}
-    rows = db.run(spec["cypher"], **params)
+    rows = db.run(spec["cypher"], incluir_robos=include_bots, **params)
+    params["incluir_robos"] = include_bots
 
     answer = llm.chat_json(
         "Responda à pergunta da plateia em 1 a 3 frases, usando apenas o resultado da consulta ao grafo. "
-        'Se o resultado estiver vazio, diga isso com bom humor. Responda: {"answer": "..."}',
-        {"pergunta": question, "resultado": rows},
+        + ("Nomes que começam com 'Eco' são robôs; mencione quando um resultado for robô. " if include_bots else "A consulta considerou só humanos. ")
+        + 'Se o resultado estiver vazio, diga isso com bom humor. Responda: {"answer": "..."}',
+        {"pergunta": question, "resultado": rows, "incluiu_robos": include_bots},
         temperature=0.7,
     )
     text = (answer or {}).get("answer") or _fallback_answer(query_id, rows)

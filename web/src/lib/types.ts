@@ -131,7 +131,7 @@ export type Verdict = {
 export type AskResult = {
   question: string
   queryId: string
-  params: Record<string, string>
+  params: Record<string, string | boolean>
   cypher: string
   rows: Record<string, unknown>[]
   answer: string
