@@ -6,12 +6,14 @@ import { PianoRoll } from '../../../components/PianoRoll'
 import { Button, Chip, Gauge, PlayIcon, Spinner, Typewriter } from '../../../components/ui'
 import { api } from '../../../lib/api'
 import { tribeColor } from '../../../lib/notes'
-import type { Mode, Performance, StageState } from '../../../lib/types'
+import type { Mode, Performance, StageState, Verdict } from '../../../lib/types'
 import { usePlayback } from '../../../lib/usePlayback'
 import { ModeToggle } from '../ModeToggle'
 import { Empty } from './GalaxyAct'
 
-type Explain = { text: string; scores: { cosine: number; euclidean: number; score: number } }
+type Explain = { text: string; scores: { cosine: number; euclidean: number; score: number }; verdict: Verdict }
+
+const VERDICT_COLOR: Record<Verdict['level'], string> = { very: '#3DFFB0', similar: '#FFD23F', weak: '#FF9A3D', different: '#FF4F6A' }
 
 export function Duel({
   state,
@@ -123,15 +125,20 @@ export function Duel({
       </div>
 
       <div className="flex min-h-0 flex-col gap-5">
-        <div className="glass flex justify-around rounded-[32px] px-4 py-6">
-          <Gauge value={explain?.scores.cosine ?? 0} label="cosseno" color="#2EC4FF" />
-          <Gauge value={explain?.scores.euclidean ?? 0} label="euclidiana" color="#FF4FD8" />
-          <Gauge value={explain?.scores.score ?? 0} label="score" color="#FFD23F" />
+        <div className="glass flex flex-col gap-5 rounded-[32px] px-6 py-6">
+          <div className="flex justify-around">
+            <Gauge value={explain?.scores.cosine ?? 0} label="cosseno" color="#2EC4FF" />
+            <Gauge value={explain?.scores.euclidean ?? 0} label="euclidiana" color="#FF4FD8" />
+            <Gauge value={explain?.scores.score ?? 0} label="score" color={explain ? VERDICT_COLOR[explain.verdict.level] : '#FFD23F'} />
+          </div>
+          {explain && <VerdictBar score={explain.scores.score} verdict={explain.verdict} />}
         </div>
         <motion.div layout className="glass flex flex-1 flex-col gap-4 rounded-[32px] p-7">
           <div className="flex items-center gap-2">
             <Chip color="#FFD23F">IA generativa</Chip>
-            <span className="font-mono text-[11px] uppercase tracking-wider text-white/40">por que são parecidos?</span>
+            <span className="font-mono text-[11px] uppercase tracking-wider text-white/40">
+              {explain ? (explain.verdict.similar ? 'por que são parecidas?' : 'por que não são parecidas?') : 'veredito do FastPath'}
+            </span>
           </div>
           {loading ? (
             <div className="flex items-center gap-3 text-white/50">
@@ -146,6 +153,60 @@ export function Duel({
           )}
           <p className="mt-auto text-sm text-white/40">O modelo recebe apenas os números calculados pelo FastPath e os fatos das melodias.</p>
         </motion.div>
+      </div>
+    </div>
+  )
+}
+
+function VerdictBar({ score, verdict }: { score: number; verdict: Verdict }) {
+  const color = VERDICT_COLOR[verdict.level]
+  const { weak, similar, very } = verdict.thresholds
+  const pct = (v: number) => `${Math.max(0, Math.min(1, v)) * 100}%`
+  const bands: { from: number; to: number; level: Verdict['level']; name: string }[] = [
+    { from: 0, to: weak, level: 'different', name: 'diferentes' },
+    { from: weak, to: similar, level: 'weak', name: 'pouco' },
+    { from: similar, to: very, level: 'similar', name: 'parecidas' },
+    { from: very, to: 1, level: 'very', name: 'muito' },
+  ]
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-white/40">veredito · corte de score</span>
+        <motion.span
+          key={verdict.level}
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="rounded-full px-4 py-1.5 font-display text-lg font-bold uppercase tracking-wide text-ink"
+          style={{ background: color, boxShadow: `0 0 24px ${color}80` }}
+        >
+          {verdict.label}
+        </motion.span>
+      </div>
+      <div className="relative h-3 w-full">
+        <div className="absolute inset-0 flex overflow-hidden rounded-full">
+          {bands.map((b) => (
+            <div key={b.level} style={{ width: pct(b.to - b.from), background: VERDICT_COLOR[b.level], opacity: b.level === verdict.level ? 0.9 : 0.22 }} />
+          ))}
+        </div>
+        <motion.div
+          className="absolute -top-1 h-5 w-1.5 -translate-x-1/2 rounded-full bg-white"
+          style={{ boxShadow: '0 0 10px #fff' }}
+          initial={{ left: 0 }}
+          animate={{ left: pct(score) }}
+          transition={{ duration: 1.4, ease: [0.2, 0.8, 0.2, 1] }}
+        />
+      </div>
+      <div className="relative h-7 font-mono text-[10px] uppercase tracking-wider text-white/40">
+        {bands.map((b) => (
+          <span key={b.level} className="absolute -translate-x-1/2" style={{ left: pct((b.from + b.to) / 2), color: b.level === verdict.level ? color : undefined }}>
+            {b.name}
+          </span>
+        ))}
+        {[weak, similar, very].map((t) => (
+          <span key={t} className="absolute -translate-x-1/2 text-white/25" style={{ left: pct(t), top: 14 }}>
+            {Math.round(t * 100)}
+          </span>
+        ))}
       </div>
     </div>
   )

@@ -152,24 +152,38 @@ def profiles(people: list[dict]) -> dict[str, dict]:
 
 # ---------- explanation ----------
 
-def explain(a: dict, b: dict, scores: dict, mode_label: str) -> str:
+def explain(a: dict, b: dict, scores: dict, mode_label: str, verdict: dict) -> str:
+    label = verdict["label"]
+    th = verdict["thresholds"]
     result = chat_json(
-        "Explique para uma plateia leiga, em 2 a 3 frases, por que o FastPath considerou estas duas melodias "
-        f"parecidas (modo: {mode_label}). Cosseno alto = mesmo padrão de notas no mesmo momento; "
-        "euclidiana alta = intensidade parecida (quantidade/densidade de notas). Cite números concretos. "
+        "Explique para uma plateia leiga, em 2 a 3 frases, o resultado do FastPath para estas duas melodias "
+        f"(modo: {mode_label}). O veredito já está decidido pelos cortes de score e você DEVE concordar com ele: "
+        f"as melodias são '{label}' (score {scores.get('score', 0):.2f}; cortes: muito parecidas >= {th['very']}, "
+        f"parecidas >= {th['similar']}, pouco parecidas >= {th['weak']}, abaixo disso diferentes). "
+        "Se o veredito for 'pouco parecidas' ou 'diferentes', explique o que as afasta; nunca diga que são parecidas. "
+        "Cosseno alto = mesmo padrão de notas no mesmo momento; euclidiana alta = intensidade parecida "
+        "(quantidade/densidade de notas). Cite números concretos. "
         'Responda: {"text": "..."}',
-        {"a": a, "b": b, "scores": scores},
+        {"a": a, "b": b, "scores": scores, "veredito": label},
         temperature=0.6,
     )
     if result and result.get("text"):
         return result["text"]
     fa, fb = a["facts"], b["facts"]
     common = sorted(set(fa["favoriteNotes"]) & set(fb["favoriteNotes"]))
+    cos, euc, score = scores.get("cosine", 0), scores.get("euclidean", 0), scores.get("score", 0)
+    if verdict["similar"]:
+        return (
+            f"{a['name']} e {b['name']} são {label} (score {score:.2f}). Cosseno {cos:.2f}: "
+            + (f"os dois apostaram em {', '.join(common)} " if common else "padrões parecidos ")
+            + f"em momentos próximos. Ritmos de {fa['notesPerSecond']} e {fb['notesPerSecond']} notas por segundo "
+            f"deixam a intensidade parecida (euclidiana {euc:.2f})."
+        )
     return (
-        f"{a['name']} e {b['name']} têm cosseno {scores.get('cosine', 0):.2f}: "
-        + (f"os dois apostaram em {', '.join(common)} " if common else "padrões parecidos ")
-        + f"em momentos próximos. Ritmos de {fa['notesPerSecond']} e {fb['notesPerSecond']} notas por segundo "
-        f"deixam a intensidade parecida (euclidiana {scores.get('euclidean', 0):.2f})."
+        f"{a['name']} e {b['name']} são {label} (score {score:.2f}, abaixo do corte de {th['similar']}). "
+        f"Cosseno {cos:.2f} mostra que as notas raramente coincidem no mesmo momento"
+        + (f", mesmo com {', '.join(common)} em comum" if common else "")
+        + f"; e {fa['notesPerSecond']} contra {fb['notesPerSecond']} notas por segundo dão intensidades distintas (euclidiana {euc:.2f})."
     )
 
 

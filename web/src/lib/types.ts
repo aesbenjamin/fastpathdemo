@@ -121,6 +121,13 @@ export type Composition = {
   neighbors: Similar[]
 }
 
+export type Verdict = {
+  level: 'very' | 'similar' | 'weak' | 'different'
+  label: string
+  similar: boolean
+  thresholds: { very: number; similar: number; weak: number }
+}
+
 export type AskResult = {
   question: string
   queryId: string

@@ -1,4 +1,4 @@
-import type { AskResult, Composition, Health, Job, Lobby, Mode, StageState } from './types'
+import type { AskResult, Composition, Health, Job, Lobby, Mode, StageState, Verdict } from './types'
 
 const params = new URLSearchParams(window.location.search)
 export const API_URL = (params.get('api') || import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
@@ -26,7 +26,7 @@ export const api = {
   warmup: () => post<{ session: string }>('/api/session/warmup'),
   deleteSession: () => call<{ deleted: boolean }>('/api/session', { method: 'DELETE' }),
   explain: (a: string, b: string, mode: Mode) =>
-    post<{ text: string; scores: { cosine: number; euclidean: number; score: number } }>('/api/explain', { a, b, mode }),
+    post<{ text: string; scores: { cosine: number; euclidean: number; score: number }; verdict: Verdict }>('/api/explain', { a, b, mode }),
   compose: (tribeId: string) => post<Composition>('/api/compose', { tribeId }),
   ask: (question: string) => post<AskResult>('/api/ask', { question }),
   suggestions: () => call<string[]>('/api/ask/suggestions'),

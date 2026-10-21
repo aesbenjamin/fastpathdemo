@@ -69,6 +69,11 @@ class Settings:
     knn_candidates: int = field(default_factory=lambda: _int("KNN_CANDIDATES", 10))
     knn_top_k: int = field(default_factory=lambda: _int("KNN_TOP_K", 5))
     cosine_weight: float = field(default_factory=lambda: _float("COSINE_WEIGHT", 0.6))
+    # Score cut-offs for the verdict shown in the Duel (score = weighted cosine + euclidean, 0..1).
+    # Calibrated on the KNN output: top-5 neighbours sit between ~0.6 and ~0.95; random pairs below ~0.45.
+    score_very_similar: float = field(default_factory=lambda: _float("SCORE_VERY_SIMILAR", 0.75))
+    score_similar: float = field(default_factory=lambda: _float("SCORE_SIMILAR", 0.55))
+    score_weak: float = field(default_factory=lambda: _float("SCORE_WEAK", 0.40))
 
     def fastpath(self, mode: str) -> FastPathParams:
         anchors = _int("FP_TIME_ANCHORS", 20) if mode == "full" else 1
@@ -86,6 +91,24 @@ class Settings:
 
 
 settings = Settings()
+
+
+def verdict(score: float) -> dict:
+    """Classify a pair score into a human-readable verdict shared by the API and the LLM prompt."""
+    if score >= settings.score_very_similar:
+        level, label = "very", "muito parecidas"
+    elif score >= settings.score_similar:
+        level, label = "similar", "parecidas"
+    elif score >= settings.score_weak:
+        level, label = "weak", "pouco parecidas"
+    else:
+        level, label = "different", "diferentes"
+    return {
+        "level": level,
+        "label": label,
+        "similar": level in ("very", "similar"),
+        "thresholds": {"very": settings.score_very_similar, "similar": settings.score_similar, "weak": settings.score_weak},
+    }
 
 MODES = ("full", "notes")
 MODE_LABELS = {"full": "notas + tempo", "notes": "só notas"}

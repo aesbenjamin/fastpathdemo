@@ -101,6 +101,19 @@ Ajustados com `scripts/tune.py` sobre os 6 arquétipos de bots e confirmados no 
 | `smoothing_window` / `smoothing_rate` | 1 / 1÷espaçamento | Um evento "vaza" para a âncora vizinha |
 | `decay_rate` | 0 | Começo e fim da melodia pesam igual |
 
+### Veredito do Duelo
+
+O score de um par é `0.6·cosseno + 0.4·euclidiana` (0 a 1). O Duelo classifica o par por cortes, e a IA é obrigada a concordar com o veredito:
+
+| Score | Veredito |
+|---|---|
+| ≥ 0.75 | muito parecidas |
+| ≥ 0.55 | parecidas |
+| ≥ 0.40 | pouco parecidas |
+| < 0.40 | diferentes |
+
+Calibrado na saída do KNN: os 5 vizinhos mais próximos ficam entre ~0.6 e ~0.95; pares aleatórios abaixo de ~0.45. Ajuste com `SCORE_VERY_SIMILAR`, `SCORE_SIMILAR` e `SCORE_WEAK` no `server/.env`.
+
 ## Estrutura
 
 ```

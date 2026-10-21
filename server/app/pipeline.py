@@ -9,7 +9,7 @@ import traceback
 import numpy as np
 
 from . import analytics, db, fastpath_local, llm
-from .config import MODE_LABELS, MODES, settings
+from .config import MODE_LABELS, MODES, settings, verdict
 from .facts import melody_facts, tribe_facts
 from .fastpath_aga import aga
 
@@ -218,10 +218,10 @@ def explain(a_id: str, b_id: str, mode: str) -> dict:
         """,
         a=a_id, b=b_id, mode=mode,
     )
-    if rel and rel[0]["explanation"]:
-        return {"text": rel[0]["explanation"], "scores": rel[0], "cached": True}
     if rel:
         scores = {k: rel[0][k] for k in ("cosine", "euclidean", "score")}
+        if rel[0]["explanation"]:
+            return {"text": rel[0]["explanation"], "scores": scores, "verdict": verdict(scores["score"]), "cached": True}
     else:
         emb = db.fetch_embeddings()
         va, vb = np.array(emb[a_id][mode]), np.array(emb[b_id][mode])
@@ -230,15 +230,17 @@ def explain(a_id: str, b_id: str, mode: str) -> dict:
         euclidean = 1.0 / (1.0 + float(np.linalg.norm(va / scale - vb / scale)))
         scores = {"cosine": round(cosine, 4), "euclidean": round(euclidean, 4),
                   "score": round(settings.cosine_weight * cosine + (1 - settings.cosine_weight) * euclidean, 4)}
+    v = verdict(scores["score"])
     text = llm.explain(
         {"name": a["name"], "facts": melody_facts(a["notes"])},
         {"name": b["name"], "facts": melody_facts(b["notes"])},
         scores,
         MODE_LABELS[mode],
+        v,
     )
     if rel:
         db.save_explanation(a_id, b_id, mode, text)
-    return {"text": text, "scores": scores, "cached": False}
+    return {"text": text, "scores": scores, "verdict": v, "cached": False}
 
 
 # ---------- composition ----------
