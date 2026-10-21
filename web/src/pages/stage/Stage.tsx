@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useMemo, useState } from 'react'
 import { Aurora } from '../../components/Aurora'
-import { Button, Dot, Logo } from '../../components/ui'
+import { Button, Dot, Logo, Neo4jLogo } from '../../components/ui'
 import { api, API_URL } from '../../lib/api'
 import { unlockAudio } from '../../lib/audio'
 import type { Mode } from '../../lib/types'
@@ -60,7 +60,11 @@ export function Stage() {
       <Aurora />
       <div className="relative z-10 flex h-full flex-col">
         <header className="flex items-center justify-between px-10 py-6">
-          <Logo />
+          <div className="flex items-center gap-5">
+            <Neo4jLogo />
+            <span className="h-7 w-px bg-white/15" />
+            <Logo />
+          </div>
           <nav className="flex items-center gap-1 rounded-full bg-black/30 p-1 ring-1 ring-white/10 backdrop-blur">
             {ACTS.map((name, i) => (
               <button key={name} onClick={() => setAct(i)} className="relative rounded-full px-4 py-2 text-sm">

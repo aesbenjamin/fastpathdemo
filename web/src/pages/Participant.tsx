@@ -4,7 +4,7 @@ import { Aurora } from '../components/Aurora'
 import { ChainPreview } from '../components/ChainPreview'
 import { Keyboard } from '../components/Keyboard'
 import { PianoRoll } from '../components/PianoRoll'
-import { Button, Chip, Logo, PlayIcon, Spinner } from '../components/ui'
+import { Button, Chip, Logo, Neo4jLogo, PlayIcon, Spinner } from '../components/ui'
 import { Visualizer } from '../components/Visualizer'
 import { playNote, unlockAudio } from '../lib/audio'
 import { fetchMyResult, submitPerformance, type MyResult } from '../lib/neo4j'
@@ -124,7 +124,10 @@ function Intro({ name, setName, onStart }: { name: string; setName: (v: string) 
   const ok = name.trim().length >= 2
   return (
     <div className="flex flex-1 flex-col justify-between gap-10 py-6">
-      <Logo size="sm" />
+      <div className="flex items-center justify-between">
+        <Logo size="sm" />
+        <Neo4jLogo size="sm" className="text-white/80" />
+      </div>
       <div className="space-y-6">
         <motion.h1
           className="font-display text-[44px] font-bold leading-[1.02] tracking-tight"
@@ -354,7 +357,7 @@ function Reveal({ name, notes, result, onAgain }: { name: string; notes: NoteEve
       >
         <div className="flex items-center justify-between">
           <Chip color={color}>tribo</Chip>
-          <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-white/40">FastPath · Neo4j</span>
+          <Neo4jLogo size="sm" className="text-white/70" />
         </div>
         <p className="mt-3 font-display text-lg font-semibold" style={{ color }}>
           {result.tribeName}
