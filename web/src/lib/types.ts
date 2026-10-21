@@ -126,6 +126,7 @@ export type Verdict = {
   label: string
   similar: boolean
   thresholds: { very: number; similar: number; weak: number }
+  reference: { knnMedian?: number; bestNeighbourMedian?: number; pairs?: number }
 }
 
 export type AskResult = {

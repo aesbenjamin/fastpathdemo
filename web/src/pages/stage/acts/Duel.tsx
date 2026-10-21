@@ -164,19 +164,26 @@ function VerdictBar({ score, verdict }: { score: number; verdict: Verdict }) {
   const pct = (v: number) => `${Math.max(0, Math.min(1, v)) * 100}%`
   const bands: { from: number; to: number; level: Verdict['level']; name: string }[] = [
     { from: 0, to: weak, level: 'different', name: 'diferentes' },
-    { from: weak, to: similar, level: 'weak', name: 'pouco' },
+    { from: weak, to: similar, level: 'weak', name: 'leve' },
     { from: similar, to: very, level: 'similar', name: 'parecidas' },
     { from: very, to: 1, level: 'very', name: 'muito' },
   ]
   return (
     <div className="space-y-2.5">
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-white/40">veredito · corte de score</span>
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0 font-mono text-[11px] uppercase tracking-[0.25em] text-white/40">
+          <p>veredito · cortes calibrados pelo KNN</p>
+          {verdict.reference.knnMedian != null && (
+            <p className="mt-0.5 normal-case tracking-normal text-white/30">
+              vizinho típico {Math.round(verdict.reference.knnMedian * 100)} · melhor vizinho {Math.round((verdict.reference.bestNeighbourMedian ?? 0) * 100)}
+            </p>
+          )}
+        </div>
         <motion.span
           key={verdict.level}
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="rounded-full px-4 py-1.5 font-display text-lg font-bold uppercase tracking-wide text-ink"
+          className="shrink-0 whitespace-nowrap rounded-full px-4 py-1.5 font-display text-base font-bold uppercase tracking-wide text-ink"
           style={{ background: color, boxShadow: `0 0 24px ${color}80` }}
         >
           {verdict.label}

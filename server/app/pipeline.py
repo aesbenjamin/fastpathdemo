@@ -9,7 +9,7 @@ import traceback
 import numpy as np
 
 from . import analytics, db, fastpath_local, llm
-from .config import MODE_LABELS, MODES, settings, verdict
+from .config import DEFAULT_THRESHOLDS, MODE_LABELS, MODES, settings, verdict
 from .facts import melody_facts, tribe_facts
 from .fastpath_aga import aga
 
@@ -207,6 +207,28 @@ def state() -> dict:
 
 # ---------- explanation ----------
 
+def score_thresholds(mode: str) -> tuple[dict, dict]:
+    """Cut-offs calibrated on this run's KNN output, so 'parecidas' means 'at the level of real neighbours'.
+
+    similar = median score among all top-k neighbour pairs; very = median score of everyone's best neighbour;
+    weak = similar minus a band. Env vars SCORE_* pin any of them to a fixed value.
+    """
+    scores = db.run("MATCH (:Performance)-[s:SIMILAR_TO {mode: $mode}]->(:Performance) RETURN s.rank AS rank, s.score AS score", mode=mode)
+    reference: dict = {}
+    th = dict(DEFAULT_THRESHOLDS)
+    if scores:
+        all_scores = np.array([r["score"] for r in scores])
+        best = np.array([r["score"] for r in scores if r["rank"] == 1] or all_scores)
+        th["similar"] = float(np.median(all_scores))
+        th["very"] = max(float(np.median(best)), th["similar"] + 0.05)
+        th["weak"] = th["similar"] - settings.score_weak_band
+        reference = {"knnMedian": round(th["similar"], 2), "bestNeighbourMedian": round(float(np.median(best)), 2), "pairs": len(scores)}
+    for key, pinned in (("very", settings.score_very_similar), ("similar", settings.score_similar), ("weak", settings.score_weak)):
+        if pinned is not None:
+            th[key] = pinned
+    return th, reference
+
+
 def explain(a_id: str, b_id: str, mode: str) -> dict:
     performances = {p["id"]: p for p in db.fetch_performances()}
     a, b = performances[a_id], performances[b_id]
@@ -218,10 +240,13 @@ def explain(a_id: str, b_id: str, mode: str) -> dict:
         """,
         a=a_id, b=b_id, mode=mode,
     )
+    th, reference = score_thresholds(mode)
     if rel:
         scores = {k: rel[0][k] for k in ("cosine", "euclidean", "score")}
-        if rel[0]["explanation"]:
-            return {"text": rel[0]["explanation"], "scores": scores, "verdict": verdict(scores["score"]), "cached": True}
+        v = verdict(scores["score"], th, reference)
+        # cached texts were written for similar pairs; regenerate if the calibrated verdict disagrees
+        if rel[0]["explanation"] and v["similar"]:
+            return {"text": rel[0]["explanation"], "scores": scores, "verdict": v, "cached": True}
     else:
         emb = db.fetch_embeddings()
         va, vb = np.array(emb[a_id][mode]), np.array(emb[b_id][mode])
@@ -230,7 +255,7 @@ def explain(a_id: str, b_id: str, mode: str) -> dict:
         euclidean = 1.0 / (1.0 + float(np.linalg.norm(va / scale - vb / scale)))
         scores = {"cosine": round(cosine, 4), "euclidean": round(euclidean, 4),
                   "score": round(settings.cosine_weight * cosine + (1 - settings.cosine_weight) * euclidean, 4)}
-    v = verdict(scores["score"])
+    v = verdict(scores["score"], th, reference)
     text = llm.explain(
         {"name": a["name"], "facts": melody_facts(a["notes"])},
         {"name": b["name"], "facts": melody_facts(b["notes"])},

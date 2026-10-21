@@ -70,10 +70,13 @@ class Settings:
     knn_top_k: int = field(default_factory=lambda: _int("KNN_TOP_K", 5))
     cosine_weight: float = field(default_factory=lambda: _float("COSINE_WEIGHT", 0.6))
     # Score cut-offs for the verdict shown in the Duel (score = weighted cosine + euclidean, 0..1).
-    # Calibrated on the KNN output: top-5 neighbours sit between ~0.6 and ~0.95; random pairs below ~0.45.
-    score_very_similar: float = field(default_factory=lambda: _float("SCORE_VERY_SIMILAR", 0.75))
-    score_similar: float = field(default_factory=lambda: _float("SCORE_SIMILAR", 0.55))
-    score_weak: float = field(default_factory=lambda: _float("SCORE_WEAK", 0.40))
+    # By default they are calibrated on the KNN output of the current run (see pipeline.score_thresholds);
+    # set the env vars to pin fixed values instead. The numbers below are also the fallback before a run.
+    score_very_similar: float | None = field(default_factory=lambda: _float("SCORE_VERY_SIMILAR", 0.80) if _env("SCORE_VERY_SIMILAR") else None)
+    score_similar: float | None = field(default_factory=lambda: _float("SCORE_SIMILAR", 0.65) if _env("SCORE_SIMILAR") else None)
+    score_weak: float | None = field(default_factory=lambda: _float("SCORE_WEAK", 0.50) if _env("SCORE_WEAK") else None)
+    # Band below "similar" that still counts as "slightly similar" when calibrating from the KNN.
+    score_weak_band: float = field(default_factory=lambda: _float("SCORE_WEAK_BAND", 0.15))
 
     def fastpath(self, mode: str) -> FastPathParams:
         anchors = _int("FP_TIME_ANCHORS", 20) if mode == "full" else 1
@@ -93,21 +96,26 @@ class Settings:
 settings = Settings()
 
 
-def verdict(score: float) -> dict:
+DEFAULT_THRESHOLDS = {"very": 0.80, "similar": 0.65, "weak": 0.50}
+
+
+def verdict(score: float, thresholds: dict | None = None, reference: dict | None = None) -> dict:
     """Classify a pair score into a human-readable verdict shared by the API and the LLM prompt."""
-    if score >= settings.score_very_similar:
+    th = thresholds or DEFAULT_THRESHOLDS
+    if score >= th["very"]:
         level, label = "very", "muito parecidas"
-    elif score >= settings.score_similar:
+    elif score >= th["similar"]:
         level, label = "similar", "parecidas"
-    elif score >= settings.score_weak:
-        level, label = "weak", "pouco parecidas"
+    elif score >= th["weak"]:
+        level, label = "weak", "levemente parecidas"
     else:
         level, label = "different", "diferentes"
     return {
         "level": level,
         "label": label,
         "similar": level in ("very", "similar"),
-        "thresholds": {"very": settings.score_very_similar, "similar": settings.score_similar, "weak": settings.score_weak},
+        "thresholds": {k: round(float(th[k]), 2) for k in ("very", "similar", "weak")},
+        "reference": reference or {},
     }
 
 MODES = ("full", "notes")

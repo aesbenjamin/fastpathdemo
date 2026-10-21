@@ -103,16 +103,16 @@ Ajustados com `scripts/tune.py` sobre os 6 arquétipos de bots e confirmados no 
 
 ### Veredito do Duelo
 
-O score de um par é `0.6·cosseno + 0.4·euclidiana` (0 a 1). O Duelo classifica o par por cortes, e a IA é obrigada a concordar com o veredito:
+O score de um par é `0.6·cosseno + 0.4·euclidiana` (0 a 1). O Duelo classifica o par por cortes calibrados na saída do KNN da rodada atual, por modo, e a IA é obrigada a concordar com o veredito e a adotar um tom condizente (sóbrio para "parecidas", enfatizando diferenças para "levemente"):
 
-| Score | Veredito |
+| Veredito | Corte |
 |---|---|
-| ≥ 0.75 | muito parecidas |
-| ≥ 0.55 | parecidas |
-| ≥ 0.40 | pouco parecidas |
-| < 0.40 | diferentes |
+| muito parecidas | ≥ mediana do score do *melhor* vizinho de cada melodia (~0.77 no modo notas + tempo) |
+| parecidas | ≥ mediana do score entre todos os pares vizinhos do KNN (~0.68) |
+| levemente parecidas | ≥ corte de "parecidas" − 0.15 |
+| diferentes | abaixo disso |
 
-Calibrado na saída do KNN: os 5 vizinhos mais próximos ficam entre ~0.6 e ~0.95; pares aleatórios abaixo de ~0.45. Ajuste com `SCORE_VERY_SIMILAR`, `SCORE_SIMILAR` e `SCORE_WEAK` no `server/.env`.
+Ou seja: só é "parecido" quem está no nível dos vizinhos que o FastPath de fato encontrou. Para fixar valores, use `SCORE_VERY_SIMILAR`, `SCORE_SIMILAR`, `SCORE_WEAK` (e `SCORE_WEAK_BAND`) no `server/.env`.
 
 ## Estrutura
 
