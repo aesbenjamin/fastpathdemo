@@ -1,0 +1,17 @@
+.DS_Store
+credentials.txt
+token_github.txt
+.local/
+
+# material de referência de clientes
+/*.ipynb
+/*.png
+
+server/.venv/
+server/.env
+__pycache__/
+*.pyc
+
+web/node_modules/
+web/dist/
+web/.env.local
