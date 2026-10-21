@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useMemo, useState } from 'react'
 import { Galaxy } from '../../../components/Galaxy'
+import { PersonPicker } from '../../../components/PersonPicker'
 import { PianoRoll } from '../../../components/PianoRoll'
 import { Button, Chip, PlayIcon } from '../../../components/ui'
 import { tribeColor } from '../../../lib/notes'
@@ -21,6 +22,7 @@ export function GalaxyAct({
 }) {
   const [selected, setSelected] = useState<Performance | null>(null)
   const [showBots, setShowBots] = useState(true)
+  const [picking, setPicking] = useState(false)
   const playback = usePlayback()
   const tribes = useMemo(() => (state?.tribes ?? []).filter((t) => t.mode === mode), [state, mode])
   const byId = useMemo(() => new Map((state?.performances ?? []).map((p) => [p.id, p])), [state])
@@ -28,8 +30,18 @@ export function GalaxyAct({
   if (!state?.hasResults) return <Empty />
 
   const select = (p: Performance) => {
+    if (picking && selected && p.id !== selected.id) {
+      setPicking(false)
+      onDuel(selected.id, p.id)
+      return
+    }
     setSelected(p)
     playback.play(p.notes)
+  }
+  const close = () => {
+    setSelected(null)
+    setPicking(false)
+    playback.stop()
   }
   const neighbors = selected
     ? state.similar.filter((s) => s.mode === mode && s.source === selected.id).sort((a, b) => a.rank - b.rank)
@@ -43,7 +55,33 @@ export function GalaxyAct({
           <button onClick={() => setShowBots((v) => !v)} className="rounded-full border border-white/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wider text-white/60 hover:text-white">
             {showBots ? 'ocultar ecos' : 'mostrar ecos'}
           </button>
+          <PersonPicker
+            performances={state.performances}
+            mode={mode}
+            inline
+            excludeId={picking ? selected?.id : null}
+            placeholder={picking ? 'buscar adversário...' : 'buscar pessoa...'}
+            className="w-64"
+            onPick={select}
+          />
         </div>
+        <AnimatePresence>
+          {picking && selected && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="absolute left-1/2 top-20 z-10 flex -translate-x-1/2 items-center gap-3 rounded-full bg-[#FF4FD8]/15 px-5 py-2.5 ring-1 ring-[#FF4FD8]/50 backdrop-blur"
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-cyan font-display text-xs font-bold text-ink">A</span>
+              <span className="font-display font-semibold">{selected.name}</span>
+              <span className="text-white/60">versus</span>
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#FF4FD8] font-display text-xs font-bold text-ink">B</span>
+              <span className="text-white/80">clique no adversário na galáxia</span>
+              <button onClick={() => setPicking(false)} className="ml-2 text-white/50 hover:text-white">×</button>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <div className="absolute right-6 top-5 z-10 flex items-center gap-4 font-mono text-[11px] uppercase tracking-wider text-white/50">
           <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full border border-white bg-white/80" /> pessoa</span>
           <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-white/40" /> eco robô</span>
@@ -70,16 +108,21 @@ export function GalaxyAct({
                   <h3 className="mt-3 font-display text-3xl font-bold">{selected.name}</h3>
                   {selected.profileTitle && <p className="text-lg text-white/70">{selected.profileTitle}</p>}
                 </div>
-                <button onClick={() => setSelected(null)} className="text-2xl text-white/40 hover:text-white">×</button>
+                <button onClick={close} className="text-2xl text-white/40 hover:text-white">×</button>
               </div>
               {selected.profileText && <p className="text-[15px] leading-relaxed text-white/70">{selected.profileText}</p>}
               {selected.generatedText && <p className="text-[15px] leading-relaxed text-white/70">{selected.generatedText}</p>}
               <div className="h-28 rounded-2xl bg-black/30 p-2">
                 <PianoRoll notes={selected.notes} playhead={playback.playhead} activeIndex={playback.activeIndex} height={100} compact />
               </div>
-              <Button variant="soft" onClick={() => (playback.playing ? playback.stop() : playback.play(selected.notes))}>
-                <PlayIcon playing={playback.playing} /> Tocar
-              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="soft" onClick={() => (playback.playing ? playback.stop() : playback.play(selected.notes))}>
+                  <PlayIcon playing={playback.playing} /> Tocar
+                </Button>
+                <Button variant={picking ? 'primary' : 'soft'} onClick={() => setPicking((v) => !v)}>
+                  {picking ? 'escolhendo B...' : 'Duelar com...'}
+                </Button>
+              </div>
               <div>
                 <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.25em] text-mute">mais parecidos</p>
                 <div className="space-y-2">

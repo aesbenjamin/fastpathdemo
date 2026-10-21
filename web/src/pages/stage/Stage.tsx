@@ -117,7 +117,16 @@ export function Stage() {
               )}
               {act === 3 && <Duel state={data.state} mode={mode} setMode={setMode} pair={pair} setPair={setPair} />}
               {act === 4 && <Compose state={data.state} refresh={data.refresh} />}
-              {act === 5 && <Ask />}
+              {act === 5 && (
+                <Ask
+                  state={data.state}
+                  mode={mode}
+                  onDuel={(a, b) => {
+                    setPair([a, b])
+                    setAct(3)
+                  }}
+                />
+              )}
               {act === 6 && <Applications />}
             </motion.div>
           </AnimatePresence>

@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { useEffect, useMemo, useState } from 'react'
 import { GraphView } from '../../../components/GraphView'
+import { PersonPicker } from '../../../components/PersonPicker'
 import { PianoRoll } from '../../../components/PianoRoll'
 import { Button, Chip, Gauge, PlayIcon, Spinner, Typewriter } from '../../../components/ui'
 import { api } from '../../../lib/api'
@@ -104,14 +105,14 @@ export function Duel({
 
         {view === 'roll' ? (
           <div className="flex flex-1 flex-col justify-center gap-4">
-            <Side label="A" p={a} mode={mode} perfs={ordered} onChange={(id) => setPair([id, b.id])} />
+            <Side label="A" p={a} other={b} mode={mode} perfs={ordered} onChange={(id) => setPair([id, b.id])} />
             <div className="h-36 rounded-2xl bg-black/30 p-2">
               <PianoRoll notes={a.notes} durationMs={span} playhead={pa.playhead} activeIndex={pa.activeIndex} height={128} accent="#2EC4FF" />
             </div>
             <div className="h-36 rounded-2xl bg-black/30 p-2">
               <PianoRoll notes={b.notes} durationMs={span} playhead={pb.playhead} activeIndex={pb.activeIndex} height={128} accent="#FF4FD8" ghost={a.notes} />
             </div>
-            <Side label="B" p={b} mode={mode} perfs={ordered} onChange={(id) => setPair([a.id, id])} />
+            <Side label="B" p={b} other={a} mode={mode} perfs={ordered} onChange={(id) => setPair([a.id, id])} />
           </div>
         ) : (
           <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl bg-black/30">
@@ -150,24 +151,34 @@ export function Duel({
   )
 }
 
-function Side({ label, p, mode, perfs, onChange }: { label: string; p: Performance; mode: Mode; perfs: Performance[]; onChange: (id: string) => void }) {
+function Side({ label, p, other, mode, perfs, onChange }: { label: string; p: Performance; other: Performance; mode: Mode; perfs: Performance[]; onChange: (id: string) => void }) {
   const color = label === 'A' ? '#2EC4FF' : '#FF4FD8'
+  const [editing, setEditing] = useState(false)
   return (
     <div className="flex items-center gap-4">
       <span className="flex h-10 w-10 items-center justify-center rounded-full font-display text-lg font-bold text-ink" style={{ background: color, boxShadow: `0 0 20px ${color}` }}>
         {label}
       </span>
-      <select
-        value={p.id}
-        onChange={(e) => onChange(e.target.value)}
-        className="max-w-72 appearance-none rounded-xl bg-transparent font-display text-3xl font-bold outline-none"
-      >
-        {perfs.map((o) => (
-          <option key={o.id} value={o.id} className="bg-night text-base">
-            {o.name}
-          </option>
-        ))}
-      </select>
+      {editing ? (
+        <PersonPicker
+          performances={perfs}
+          mode={mode}
+          excludeId={other.id}
+          autoFocus
+          size="lg"
+          placeholder={`trocar ${label}: digite um nome`}
+          className="w-80"
+          onPick={(x) => {
+            onChange(x.id)
+            setEditing(false)
+          }}
+        />
+      ) : (
+        <button onClick={() => setEditing(true)} className="group flex items-center gap-2 text-left" title="clique para trocar">
+          <span className="font-display text-3xl font-bold">{p.name}</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/30 group-hover:text-white/70"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+        </button>
+      )}
       <span className="h-2.5 w-2.5 rounded-full" style={{ background: tribeColor(p[`tribe_${mode}`]) }} />
       <span className="font-mono text-xs uppercase tracking-wider text-white/45">
         {p.noteCount} notas · {p.facts.notesPerSecond} n/s · {p.facts.favoriteNotes.slice(0, 2).join(', ')}
