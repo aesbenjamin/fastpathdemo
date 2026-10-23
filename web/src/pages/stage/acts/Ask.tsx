@@ -1,13 +1,16 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { PianoRoll } from '../../../components/PianoRoll'
 import { Button, Chip, PlayIcon, Spinner, Typewriter } from '../../../components/ui'
 import { api } from '../../../lib/api'
+import { useI18n, type I18n } from '../../../lib/i18n'
 import { tribeColor } from '../../../lib/notes'
 import type { AskResult, Mode, Performance, StageState } from '../../../lib/types'
 import { usePlayback } from '../../../lib/usePlayback'
 
 export function Ask({ state, mode, onDuel }: { state: StageState | null; mode: Mode; onDuel: (a: string, b: string) => void }) {
+  const i18n = useI18n()
+  const { t, lang, name, loc, maybe } = i18n
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [question, setQuestion] = useState('')
   const [busy, setBusy] = useState(false)
@@ -15,18 +18,23 @@ export function Ask({ state, mode, onDuel }: { state: StageState | null; mode: M
   const [showCypher, setShowCypher] = useState(false)
   const [selected, setSelected] = useState<Performance | null>(null)
   const playback = usePlayback()
+  const asked = useRef<string | null>(null)
 
   useEffect(() => {
-    api.suggestions().then(setSuggestions).catch(() => undefined)
-  }, [])
+    api.suggestions(lang).then(setSuggestions).catch(() => undefined)
+  }, [lang])
 
-  // Name -> melody. People win over robots when names collide.
+  // Name -> melody, by stored and displayed name. People win over robots when names collide.
   const byName = useMemo(() => {
     const m = new Map<string, Performance>()
     const perfs = [...(state?.performances ?? [])].sort((a, b) => Number(!!a.isBot || !!a.isGenerated) - Number(!!b.isBot || !!b.isGenerated))
-    for (const p of perfs) if (!m.has(p.name)) m.set(p.name, p)
+    for (const p of perfs) {
+      if (!m.has(p.name)) m.set(p.name, p)
+      const shown = name(p)
+      if (!m.has(shown)) m.set(shown, p)
+    }
     return m
-  }, [state])
+  }, [state, name])
 
   const people = useMemo(() => {
     const found: Performance[] = []
@@ -44,17 +52,22 @@ export function Ask({ state, mode, onDuel }: { state: StageState | null; mode: M
 
   const ask = async (q: string) => {
     if (!q.trim()) return
+    asked.current = q
     setQuestion(q)
     setBusy(true)
     setResult(null)
     setSelected(null)
     playback.stop()
     try {
-      setResult(await api.ask(q))
+      setResult(await api.ask(q, lang))
     } finally {
       setBusy(false)
     }
   }
+
+  useEffect(() => {
+    if (asked.current) ask(asked.current)
+  }, [lang]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const pick = (p: Performance) => {
     setSelected(p)
@@ -67,9 +80,9 @@ export function Ask({ state, mode, onDuel }: { state: StageState | null; mode: M
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-7 px-10 pb-10">
       <div>
-        <p className="font-mono text-sm uppercase tracking-[0.35em] text-mute">pergunte ao grafo</p>
+        <p className="font-mono text-sm uppercase tracking-[0.35em] text-mute">{t('ask.kicker')}</p>
         <h2 className="mt-2 font-display text-6xl font-bold tracking-tight">
-          Linguagem natural <span className="text-white/30">→</span> <span className="text-gradient">Cypher</span>
+          {t('ask.titleA')} <span className="text-white/30">→</span> <span className="text-gradient">Cypher</span>
         </h2>
       </div>
 
@@ -84,7 +97,7 @@ export function Ask({ state, mode, onDuel }: { state: StageState | null; mode: M
         <input
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder="Ex.: quem é a alma gêmea musical da Ana?"
+          placeholder={t('ask.placeholder')}
           className="flex-1 bg-transparent font-display text-3xl outline-none placeholder:text-white/25"
         />
         {busy && <Spinner color="#9B5CFF" />}
@@ -100,11 +113,11 @@ export function Ask({ state, mode, onDuel }: { state: StageState | null; mode: M
 
       <AnimatePresence mode="wait">
         {result && (
-          <motion.div key={result.question} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-6">
+          <motion.div key={`${result.question}-${lang}`} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-6">
             <div className="border-gradient glass flex min-h-0 flex-col gap-5 overflow-y-auto rounded-[32px] p-8 scrollbar-none">
               <div className="flex items-center gap-2">
-                <Chip color="#FFD23F">resposta</Chip>
-                <Chip color="#9B5CFF">{result.queryId}</Chip>
+                <Chip color="#FFD23F">{t('ask.answer')}</Chip>
+                <Chip color="#9B5CFF">{maybe(`query.${result.queryId}`, result.queryId)}</Chip>
               </div>
               <p className="font-display text-[34px] leading-snug">
                 <Typewriter text={result.answer} />
@@ -112,7 +125,7 @@ export function Ask({ state, mode, onDuel }: { state: StageState | null; mode: M
 
               {people.length > 0 && (
                 <div className="mt-auto space-y-3">
-                  <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-mute">pessoas na resposta · clique para ouvir</p>
+                  <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-mute">{t('ask.people')}</p>
                   <div className="flex flex-wrap gap-2">
                     {people.map((p) => {
                       const on = selected?.id === p.id
@@ -124,8 +137,8 @@ export function Ask({ state, mode, onDuel }: { state: StageState | null; mode: M
                         >
                           <span className="h-2.5 w-2.5 rounded-full" style={{ background: tribeColor(p[`tribe_${mode}`]) }} />
                           <PlayIcon playing={on && playback.playing} />
-                          {p.name}
-                          {(p.isBot || p.isGenerated) && <span className="font-mono text-[10px] uppercase opacity-60">{p.isGenerated ? 'IA' : 'eco'}</span>}
+                          {name(p)}
+                          {(p.isBot || p.isGenerated) && <span className="font-mono text-[10px] uppercase opacity-60">{p.isGenerated ? t('common.ai') : t('common.echo')}</span>}
                         </button>
                       )
                     })}
@@ -138,11 +151,11 @@ export function Ask({ state, mode, onDuel }: { state: StageState | null; mode: M
                         </div>
                         <div className="flex items-center gap-3">
                           <span className="font-mono text-xs uppercase tracking-wider text-white/45">
-                            {selected.noteCount} notas · {selected.facts.notesPerSecond} n/s{selected.profileTitle ? ` · ${selected.profileTitle}` : ''}
+                            {t('common.notes', { n: selected.noteCount })} · {selected.facts.notesPerSecond} n/s{selected.profileTitle ? ` · ${loc(selected, 'profileTitle')}` : ''}
                           </span>
                           {other && (
                             <Button size="sm" variant="soft" className="ml-auto" onClick={() => onDuel(selected.id, other.id)}>
-                              Duelo: {selected.name} × {other.name}
+                              {t('ask.duel', { a: name(selected), b: name(other) })}
                             </Button>
                           )}
                         </div>
@@ -154,9 +167,9 @@ export function Ask({ state, mode, onDuel }: { state: StageState | null; mode: M
             </div>
             <div className="glass flex min-h-0 flex-col gap-4 overflow-hidden rounded-[32px] p-6">
               <div className="flex items-center justify-between">
-                <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-mute">{result.rows.length} linhas do grafo</p>
+                <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-mute">{t('ask.rows', { n: result.rows.length })}</p>
                 <button onClick={() => setShowCypher((v) => !v)} className="font-mono text-xs uppercase tracking-wider text-cyan">
-                  {showCypher ? 'ver dados' : 'ver Cypher'}
+                  {showCypher ? t('ask.viewData') : t('ask.viewCypher')}
                 </button>
               </div>
               {showCypher ? (
@@ -167,7 +180,7 @@ export function Ask({ state, mode, onDuel }: { state: StageState | null; mode: M
                     <thead>
                       <tr>
                         {columns.map((c) => (
-                          <th key={c} className="pb-2 pr-4 font-mono text-[11px] uppercase tracking-wider text-white/40">{c}</th>
+                          <th key={c} className="pb-2 pr-4 font-mono text-[11px] uppercase tracking-wider text-white/40">{maybe(`col.${c}`, c)}</th>
                         ))}
                       </tr>
                     </thead>
@@ -176,7 +189,7 @@ export function Ask({ state, mode, onDuel }: { state: StageState | null; mode: M
                         <tr key={i} className="border-t border-white/5">
                           {columns.map((c) => (
                             <td key={c} className="py-2 pr-4 text-white/80">
-                              <Cell value={r[c]} byName={byName} selectedId={selected?.id} onPick={pick} />
+                              <Cell value={c === 'note' ? i18n.note(String(r[c])) : r[c]} byName={byName} selectedId={selected?.id} onPick={pick} i18n={i18n} />
                             </td>
                           ))}
                         </tr>
@@ -193,12 +206,14 @@ export function Ask({ state, mode, onDuel }: { state: StageState | null; mode: M
   )
 }
 
-function Cell({ value, byName, selectedId, onPick }: { value: unknown; byName: Map<string, Performance>; selectedId?: string; onPick: (p: Performance) => void }) {
+type CellProps = { value: unknown; byName: Map<string, Performance>; selectedId?: string; onPick: (p: Performance) => void; i18n: I18n }
+
+function Cell({ value, byName, selectedId, onPick, i18n }: CellProps) {
   if (typeof value === 'string' && byName.has(value)) {
     const p = byName.get(value)!
     return (
       <button onClick={() => onPick(p)} className={`rounded-md px-1.5 py-0.5 font-medium underline decoration-dotted underline-offset-4 hover:bg-white/10 ${selectedId === p.id ? 'bg-white/15 text-white' : 'text-cyan'}`}>
-        {value}
+        {i18n.name(p)}
       </button>
     )
   }
@@ -207,7 +222,7 @@ function Cell({ value, byName, selectedId, onPick }: { value: unknown; byName: M
       <span className="flex flex-wrap gap-x-1 gap-y-0.5">
         {value.map((v, i) => (
           <span key={i}>
-            <Cell value={v} byName={byName} selectedId={selectedId} onPick={onPick} />
+            <Cell value={v} byName={byName} selectedId={selectedId} onPick={onPick} i18n={i18n} />
             {i < value.length - 1 && <span className="text-white/30">,</span>}
           </span>
         ))}
@@ -220,18 +235,19 @@ function Cell({ value, byName, selectedId, onPick }: { value: unknown; byName: M
       <span className="flex flex-wrap gap-x-1">
         {vals.map((v, i) => (
           <span key={i}>
-            <Cell value={v} byName={byName} selectedId={selectedId} onPick={onPick} />
+            <Cell value={v} byName={byName} selectedId={selectedId} onPick={onPick} i18n={i18n} />
             {i < vals.length - 1 && <span className="text-white/30"> · </span>}
           </span>
         ))}
       </span>
     )
   }
-  return <>{format(value)}</>
+  return <>{format(value, i18n)}</>
 }
 
-function format(v: unknown): string {
+function format(v: unknown, i18n: I18n): string {
   if (v == null) return '-'
+  if (typeof v === 'boolean') return i18n.t(v ? 'value.yes' : 'value.no')
   if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(2)
   return String(v)
 }

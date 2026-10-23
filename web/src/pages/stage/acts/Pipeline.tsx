@@ -3,37 +3,40 @@ import { ChainPreview } from '../../../components/ChainPreview'
 import { EmbeddingStrip } from '../../../components/EmbeddingStrip'
 import { PianoRoll } from '../../../components/PianoRoll'
 import { Button, Chip, Dot, Spinner } from '../../../components/ui'
+import { useI18n, type Key } from '../../../lib/i18n'
 import type { Health, Job, Performance } from '../../../lib/types'
 
 export function Pipeline({ job, health, sample, onRun }: { job: Job | null; health: Health | null; sample: Performance | null; onRun: () => void }) {
+  const { t, err, name } = useI18n()
   const running = job?.status === 'running'
   const done = new Set(job?.done ?? [])
   const fp = health?.fastpath ?? {}
+  const warning = job?.warningKey ? t(`warn.${job.warningKey}` as Key, { detail: job.warningDetail ?? '' }) : job?.warning
   return (
     <div className="flex h-full flex-col gap-8 px-14 pb-10">
       <div className="flex items-end justify-between">
         <div>
-          <p className="font-mono text-sm uppercase tracking-[0.35em] text-mute">o algoritmo</p>
+          <p className="font-mono text-sm uppercase tracking-[0.35em] text-mute">{t('pipe.kicker')}</p>
           <h2 className="mt-2 font-display text-6xl font-bold tracking-tight">
-            Sequência <span className="text-white/30">→</span> <span className="text-gradient">vetor</span> <span className="text-white/30">→</span> tribo
+            {t('pipe.titleA')} <span className="text-white/30">→</span> <span className="text-gradient">{t('pipe.titleB')}</span> <span className="text-white/30">→</span> {t('pipe.titleC')}
           </h2>
         </div>
         <div className="flex items-center gap-4">
-          {job?.backend && <Chip color={job.backend === 'aga' ? '#3DDC97' : '#FFD23F'}>{job.backend === 'aga' ? 'Aura Graph Analytics' : 'FastPath local (simulado)'}</Chip>}
+          {job?.backend && <Chip color={job.backend === 'aga' ? '#3DDC97' : '#FFD23F'}>{job.backend === 'aga' ? 'Aura Graph Analytics' : t('pipe.local')}</Chip>}
           <Button size="lg" onClick={onRun} disabled={running}>
             {running ? <Spinner color="#05040b" /> : null}
-            {running ? 'FastPath rodando' : job?.status === 'done' ? 'Rodar de novo' : 'Rodar FastPath'}
+            {running ? t('pipe.running') : job?.status === 'done' ? t('pipe.again') : t('pipe.run')}
           </Button>
         </div>
       </div>
 
       <div className="grid flex-1 grid-cols-3 gap-6">
-        <Panel n={1} title="Eventos no grafo" subtitle="Cada tecla é um nó ligado ao próximo">
-          {sample ? <ChainPreview name={sample.name} notes={sample.notes} max={7} /> : <p className="text-white/40">Aguardando melodias...</p>}
+        <Panel n={1} title={t('pipe.p1title')} subtitle={t('pipe.p1sub')}>
+          {sample ? <ChainPreview name={name(sample)} notes={sample.notes} max={7} /> : <p className="text-white/40">{t('pipe.waiting')}</p>}
           {sample && (
             <div className="rounded-2xl bg-black/25 p-2">
               <PianoRoll notes={sample.notes} height={170} compact />
-              <p className="px-1 pt-1 font-mono text-[10px] uppercase tracking-wider text-white/35">a mesma sequência no tempo · {sample.noteCount} eventos</p>
+              <p className="px-1 pt-1 font-mono text-[10px] uppercase tracking-wider text-white/35">{t('pipe.sameSeq', { n: sample.noteCount })}</p>
             </div>
           )}
           <pre className="mt-auto overflow-hidden rounded-xl bg-black/40 p-3 font-mono text-[12px] leading-relaxed text-white/70">
@@ -41,11 +44,11 @@ export function Pipeline({ job, health, sample, onRun }: { job: Job | null; heal
   -[:NEXT_EVENT]->(:NoteEvent)-[:NEXT_EVENT]->...`}
           </pre>
         </Panel>
-        <Panel n={2} title="FastPath" subtitle="Notas e tempo viram um embedding">
+        <Panel n={2} title="FastPath" subtitle={t('pipe.p2sub')}>
           <div className="rounded-2xl bg-black/25 px-3 py-4">
             <EmbeddingStrip vector={sample?.emb_full ?? null} key={sample?.id ?? 'none'} height={230} />
             <p className="pt-2 font-mono text-[10px] uppercase tracking-wider text-white/35">
-              {sample?.emb_full ? `${sample.emb_full.length} dimensões · embedding de ${sample.name}` : 'o vetor aparece depois de rodar o FastPath'}
+              {sample?.emb_full ? t('pipe.dims', { n: sample.emb_full.length, name: name(sample) }) : t('pipe.noVector')}
             </p>
           </div>
           <pre className="mt-auto overflow-hidden rounded-xl bg-black/40 p-3 font-mono text-[12px] leading-relaxed text-white/70">
@@ -56,16 +59,16 @@ export function Pipeline({ job, health, sample, onRun }: { job: Job | null; heal
             {'  '}lookback_horizon=<span className="text-magenta">{fp.lookback_horizon ?? 20001}</span>, smoothing_window=<span className="text-magenta">{fp.smoothing_window ?? 1}</span>)
           </pre>
         </Panel>
-        <Panel n={3} title="Similaridade" subtitle="Quem tocou parecido fica perto">
+        <Panel n={3} title={t('pipe.p3title')} subtitle={t('pipe.p3sub')}>
           <VectorDiagram />
           <div className="grid grid-cols-2 gap-3">
-            <Metric color="#2EC4FF" name="Cosseno" text="Mesmo padrão: mesmas notas nos mesmos momentos" />
-            <Metric color="#FF4FD8" name="Euclidiana" text="Mesma intensidade: quantidade e densidade de notas" />
+            <Metric color="#2EC4FF" name={t('pipe.cosine')} text={t('pipe.cosineText')} />
+            <Metric color="#FF4FD8" name={t('pipe.euclidean')} text={t('pipe.euclideanText')} />
           </div>
           <div className="mt-auto rounded-xl bg-black/40 p-3 font-mono text-[13px] text-white/70">
-            score = <span className="text-cyan">0.6 · cosseno</span> + <span className="text-magenta">0.4 · euclidiana</span>
+            score = <span className="text-cyan">{t('pipe.formulaCos')}</span> + <span className="text-magenta">{t('pipe.formulaEuc')}</span>
             <br />
-            tribos = KMeans(embeddings) · nomes = <span className="text-[#FFD23F]">LLM</span>
+            {t('pipe.formulaTribes')} <span className="text-[#FFD23F]">LLM</span>
           </div>
         </Panel>
       </div>
@@ -90,7 +93,7 @@ export function Pipeline({ job, health, sample, onRun }: { job: Job | null; heal
                 </div>
                 <div className="flex items-start gap-2">
                   {isCurrent ? <Spinner /> : <Dot color={color} />}
-                  <span className={`text-[13px] leading-tight ${isCurrent ? 'text-white' : isDone ? 'text-white/75' : 'text-white/35'}`}>{s.label}</span>
+                  <span className={`text-[13px] leading-tight ${isCurrent ? 'text-white' : isDone ? 'text-white/75' : 'text-white/35'}`}>{t(`step.${s.id}` as Key)}</span>
                 </div>
               </motion.div>
             )
@@ -98,11 +101,11 @@ export function Pipeline({ job, health, sample, onRun }: { job: Job | null; heal
         </div>
         {job?.status === 'done' && (
           <p className="mt-4 font-mono text-sm text-[#3DDC97]">
-            Pronto em {job.elapsedSeconds}s: {job.total} melodias, {job.people} {job.people === 1 ? 'pessoa' : 'pessoas'}.
+            {t('pipe.done', { s: job.elapsedSeconds ?? 0, total: job.total ?? 0, people: job.people ?? 0, peopleWord: t(job.people === 1 ? 'pipe.person' : 'pipe.people') })}
           </p>
         )}
-        {job?.warning && <p className="mt-2 font-mono text-sm text-[#FFD23F]">{job.warning}</p>}
-        {job?.status === 'error' && <p className="mt-4 font-mono text-sm text-[#FF3D71]">{job.error}</p>}
+        {warning && <p className="mt-2 font-mono text-sm text-[#FFD23F]">{warning}</p>}
+        {job?.status === 'error' && <p className="mt-4 font-mono text-sm text-[#FF3D71]">{err(job.error ?? '')}</p>}
       </div>
     </div>
   )

@@ -5,6 +5,7 @@ import { PersonPicker } from '../../../components/PersonPicker'
 import { PianoRoll } from '../../../components/PianoRoll'
 import { Button, Chip, Gauge, PlayIcon, Spinner, Typewriter } from '../../../components/ui'
 import { api } from '../../../lib/api'
+import { useI18n } from '../../../lib/i18n'
 import { tribeColor } from '../../../lib/notes'
 import type { Mode, Performance, StageState, Verdict } from '../../../lib/types'
 import { usePlayback } from '../../../lib/usePlayback'
@@ -28,6 +29,7 @@ export function Duel({
   pair: [string, string] | null
   setPair: (p: [string, string]) => void
 }) {
+  const { t, lang, name } = useI18n()
   const perfs = state?.performances ?? []
   const byId = useMemo(() => new Map(perfs.map((p) => [p.id, p])), [perfs])
   const [explain, setExplain] = useState<Explain | null>(null)
@@ -56,14 +58,14 @@ export function Duel({
     setExplain(null)
     setLoading(true)
     api
-      .explain(a.id, b.id, mode)
+      .explain(a.id, b.id, mode, lang)
       .then((r) => alive && setExplain(r))
       .catch(() => alive && setExplain(null))
       .finally(() => alive && setLoading(false))
     return () => {
       alive = false
     }
-  }, [a?.id, b?.id, mode]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [a?.id, b?.id, mode, lang]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!state?.hasResults || !a || !b) return <Empty />
 
@@ -75,7 +77,7 @@ export function Duel({
     pa.stop()
     pb.stop()
   }
-  const ordered = [...perfs].sort((x, y) => Number(x.isBot) - Number(y.isBot) || x.name.localeCompare(y.name))
+  const ordered = [...perfs].sort((x, y) => Number(x.isBot) - Number(y.isBot) || name(x).localeCompare(name(y)))
   const span = Math.max(a.notes.at(-1)?.t ?? 0, b.notes.at(-1)?.t ?? 0)
 
   return (
@@ -87,7 +89,7 @@ export function Duel({
             <div className="flex rounded-full bg-black/40 p-1 ring-1 ring-white/10">
               {(['roll', 'graph'] as const).map((v) => (
                 <button key={v} onClick={() => setView(v)} className={`rounded-full px-4 py-1.5 font-mono text-xs uppercase tracking-wider ${view === v ? 'bg-white text-ink' : 'text-white/60'}`}>
-                  {v === 'roll' ? 'piano roll' : 'grafo'}
+                  {v === 'roll' ? t('duel.roll') : t('duel.graph')}
                 </button>
               ))}
             </div>
@@ -100,7 +102,7 @@ export function Duel({
               <PlayIcon playing={pb.playing} /> B
             </Button>
             <Button size="sm" onClick={() => (pa.playing || pb.playing ? stopAll() : playBoth())}>
-              <PlayIcon playing={pa.playing || pb.playing} /> Juntos
+              <PlayIcon playing={pa.playing || pb.playing} /> {t('duel.together')}
             </Button>
           </div>
         </div>
@@ -119,7 +121,7 @@ export function Duel({
         ) : (
           <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl bg-black/30">
             <GraphView people={[{ p: a, color: '#2EC4FF' }, { p: b, color: '#FF4FD8' }]} score={explain?.scores.score} />
-            <p className="absolute bottom-3 left-4 font-mono text-[11px] uppercase tracking-wider text-white/40">Neo4j Visualization Library · arraste e dê zoom</p>
+            <p className="absolute bottom-3 left-4 font-mono text-[11px] uppercase tracking-wider text-white/40">{t('duel.nvl')}</p>
           </div>
         )}
       </div>
@@ -127,31 +129,31 @@ export function Duel({
       <div className="flex min-h-0 flex-col gap-5">
         <div className="glass flex flex-col gap-5 rounded-[32px] px-6 py-6">
           <div className="flex justify-around">
-            <Gauge value={explain?.scores.cosine ?? 0} label="cosseno" color="#2EC4FF" />
-            <Gauge value={explain?.scores.euclidean ?? 0} label="euclidiana" color="#FF4FD8" />
-            <Gauge value={explain?.scores.score ?? 0} label="score" color={explain ? VERDICT_COLOR[explain.verdict.level] : '#FFD23F'} />
+            <Gauge value={explain?.scores.cosine ?? 0} label={t('duel.cosine')} color="#2EC4FF" />
+            <Gauge value={explain?.scores.euclidean ?? 0} label={t('duel.euclidean')} color="#FF4FD8" />
+            <Gauge value={explain?.scores.score ?? 0} label={t('duel.score')} color={explain ? VERDICT_COLOR[explain.verdict.level] : '#FFD23F'} />
           </div>
           {explain && <VerdictBar score={explain.scores.score} verdict={explain.verdict} />}
         </div>
         <motion.div layout className="glass flex flex-1 flex-col gap-4 rounded-[32px] p-7">
           <div className="flex items-center gap-2">
-            <Chip color="#FFD23F">IA generativa</Chip>
+            <Chip color="#FFD23F">{t('duel.genai')}</Chip>
             <span className="font-mono text-[11px] uppercase tracking-wider text-white/40">
-              {explain ? (explain.verdict.similar ? 'por que são parecidas?' : 'por que não são parecidas?') : 'veredito do FastPath'}
+              {explain ? (explain.verdict.similar ? t('duel.whySimilar') : t('duel.whyNot')) : t('duel.verdictOf')}
             </span>
           </div>
           {loading ? (
             <div className="flex items-center gap-3 text-white/50">
-              <Spinner color="#FFD23F" /> lendo os fatos do grafo...
+              <Spinner color="#FFD23F" /> {t('duel.reading')}
             </div>
           ) : explain ? (
             <p className="font-display text-[26px] leading-snug text-white/90">
               <Typewriter text={explain.text} />
             </p>
           ) : (
-            <p className="text-white/40">Sem explicação disponível.</p>
+            <p className="text-white/40">{t('duel.noExplain')}</p>
           )}
-          <p className="mt-auto text-sm text-white/40">O modelo recebe apenas os números calculados pelo FastPath e os fatos das melodias.</p>
+          <p className="mt-auto text-sm text-white/40">{t('duel.footnote')}</p>
         </motion.div>
       </div>
     </div>
@@ -159,23 +161,24 @@ export function Duel({
 }
 
 function VerdictBar({ score, verdict }: { score: number; verdict: Verdict }) {
+  const { t } = useI18n()
   const color = VERDICT_COLOR[verdict.level]
   const { weak, similar, very } = verdict.thresholds
   const pct = (v: number) => `${Math.max(0, Math.min(1, v)) * 100}%`
-  const bands: { from: number; to: number; level: Verdict['level']; name: string }[] = [
-    { from: 0, to: weak, level: 'different', name: 'diferentes' },
-    { from: weak, to: similar, level: 'weak', name: 'leve' },
-    { from: similar, to: very, level: 'similar', name: 'parecidas' },
-    { from: very, to: 1, level: 'very', name: 'muito' },
+  const bands: { from: number; to: number; level: Verdict['level'] }[] = [
+    { from: 0, to: weak, level: 'different' },
+    { from: weak, to: similar, level: 'weak' },
+    { from: similar, to: very, level: 'similar' },
+    { from: very, to: 1, level: 'very' },
   ]
   return (
     <div className="space-y-2.5">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0 font-mono text-[11px] uppercase tracking-[0.25em] text-white/40">
-          <p>veredito · cortes calibrados pelo KNN</p>
+          <p>{t('duel.verdictHeader')}</p>
           {verdict.reference.knnMedian != null && (
             <p className="mt-0.5 normal-case tracking-normal text-white/30">
-              vizinho típico {Math.round(verdict.reference.knnMedian * 100)} · melhor vizinho {Math.round((verdict.reference.bestNeighbourMedian ?? 0) * 100)}
+              {t('duel.reference', { a: Math.round(verdict.reference.knnMedian * 100), b: Math.round((verdict.reference.bestNeighbourMedian ?? 0) * 100) })}
             </p>
           )}
         </div>
@@ -186,7 +189,7 @@ function VerdictBar({ score, verdict }: { score: number; verdict: Verdict }) {
           className="shrink-0 whitespace-nowrap rounded-full px-4 py-1.5 font-display text-base font-bold uppercase tracking-wide text-ink"
           style={{ background: color, boxShadow: `0 0 24px ${color}80` }}
         >
-          {verdict.label}
+          {t(`verdict.${verdict.level}`)}
         </motion.span>
       </div>
       <div className="relative h-3 w-full">
@@ -206,12 +209,12 @@ function VerdictBar({ score, verdict }: { score: number; verdict: Verdict }) {
       <div className="relative h-7 font-mono text-[10px] uppercase tracking-wider text-white/40">
         {bands.map((b) => (
           <span key={b.level} className="absolute -translate-x-1/2" style={{ left: pct((b.from + b.to) / 2), color: b.level === verdict.level ? color : undefined }}>
-            {b.name}
+            {t(`band.${b.level}`)}
           </span>
         ))}
-        {[weak, similar, very].map((t) => (
-          <span key={t} className="absolute -translate-x-1/2 text-white/25" style={{ left: pct(t), top: 14 }}>
-            {Math.round(t * 100)}
+        {[weak, similar, very].map((cut) => (
+          <span key={cut} className="absolute -translate-x-1/2 text-white/25" style={{ left: pct(cut), top: 14 }}>
+            {Math.round(cut * 100)}
           </span>
         ))}
       </div>
@@ -220,6 +223,7 @@ function VerdictBar({ score, verdict }: { score: number; verdict: Verdict }) {
 }
 
 function Side({ label, p, other, mode, perfs, onChange }: { label: string; p: Performance; other: Performance; mode: Mode; perfs: Performance[]; onChange: (id: string) => void }) {
+  const { t, name, note } = useI18n()
   const color = label === 'A' ? '#2EC4FF' : '#FF4FD8'
   const [editing, setEditing] = useState(false)
   return (
@@ -234,7 +238,7 @@ function Side({ label, p, other, mode, perfs, onChange }: { label: string; p: Pe
           excludeId={other.id}
           autoFocus
           size="lg"
-          placeholder={`trocar ${label}: digite um nome`}
+          placeholder={t('duel.swap', { label })}
           className="w-80"
           onPick={(x) => {
             onChange(x.id)
@@ -242,14 +246,14 @@ function Side({ label, p, other, mode, perfs, onChange }: { label: string; p: Pe
           }}
         />
       ) : (
-        <button onClick={() => setEditing(true)} className="group flex items-center gap-2 text-left" title="clique para trocar">
-          <span className="font-display text-3xl font-bold">{p.name}</span>
+        <button onClick={() => setEditing(true)} className="group flex items-center gap-2 text-left" title={t('duel.clickToSwap')}>
+          <span className="font-display text-3xl font-bold">{name(p)}</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/30 group-hover:text-white/70"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
         </button>
       )}
       <span className="h-2.5 w-2.5 rounded-full" style={{ background: tribeColor(p[`tribe_${mode}`]) }} />
       <span className="font-mono text-xs uppercase tracking-wider text-white/45">
-        {p.noteCount} notas · {p.facts.notesPerSecond} n/s · {p.facts.favoriteNotes.slice(0, 2).join(', ')}
+        {t('common.notes', { n: p.noteCount })} · {p.facts.notesPerSecond} n/s · {p.facts.favoriteNotes.slice(0, 2).map(note).join(', ')}
       </span>
     </div>
   )

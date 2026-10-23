@@ -6,7 +6,7 @@ let driver: Driver | null = null
 function getDriver(): Driver {
   if (!driver) {
     const uri = import.meta.env.VITE_NEO4J_URI
-    if (!uri) throw new Error('VITE_NEO4J_URI não configurado')
+    if (!uri) throw new Error('i18n:neo4j_not_configured')
     driver = neo4j.driver(
       uri,
       neo4j.auth.basic(import.meta.env.VITE_NEO4J_USER || 'neo4j', import.meta.env.VITE_NEO4J_PASSWORD || ''),
@@ -63,9 +63,13 @@ export async function submitPerformance(name: string, notes: NoteEvent[]): Promi
 export type MyResult = {
   profileTitle: string | null
   profileText: string | null
+  profileTitle_en: string | null
+  profileText_en: string | null
   originality: number | null
   tribeName: string | null
   tribeDescription: string | null
+  tribeName_en: string | null
+  tribeDescription_en: string | null
   tribeId: string | null
   soulmate: string | null
   soulmateIsBot: boolean | null
@@ -79,8 +83,10 @@ export async function fetchMyResult(id: string): Promise<MyResult | null> {
     MATCH (p:Performance {id: $id})
     OPTIONAL MATCH (p)-[:IN_TRIBE {mode: 'full'}]->(t:Tribe)
     OPTIONAL MATCH (p)-[s:SIMILAR_TO {mode: 'full', rank: 1}]->(m:Performance)
-    RETURN p.profileTitle AS profileTitle, p.profileText AS profileText, p.originality AS originality,
-           p.notesPerSecond AS notesPerSecond, t.name AS tribeName, t.description AS tribeDescription, t.id AS tribeId,
+    RETURN p.profileTitle AS profileTitle, p.profileText AS profileText,
+           p.profileTitle_en AS profileTitle_en, p.profileText_en AS profileText_en, p.originality AS originality,
+           p.notesPerSecond AS notesPerSecond, t.name AS tribeName, t.description AS tribeDescription,
+           t.name_en AS tribeName_en, t.description_en AS tribeDescription_en, t.id AS tribeId,
            m.name AS soulmate, m.isBot AS soulmateIsBot, s.score AS score
     `,
     { id },

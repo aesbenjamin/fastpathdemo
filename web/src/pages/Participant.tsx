@@ -3,10 +3,12 @@ import { useEffect, useRef, useState } from 'react'
 import { Aurora } from '../components/Aurora'
 import { ChainPreview } from '../components/ChainPreview'
 import { Keyboard } from '../components/Keyboard'
+import { LangToggle } from '../components/LangToggle'
 import { PianoRoll } from '../components/PianoRoll'
 import { Button, Chip, Logo, Neo4jLogo, PlayIcon, Spinner } from '../components/ui'
 import { Visualizer } from '../components/Visualizer'
 import { playNote, unlockAudio } from '../lib/audio'
+import { botName, useI18n } from '../lib/i18n'
 import { fetchMyResult, submitPerformance, type MyResult } from '../lib/neo4j'
 import { MAX_DURATION_MS, MIN_NOTES, tribeColor, type NoteEvent } from '../lib/notes'
 import { usePlayback } from '../lib/usePlayback'
@@ -120,15 +122,25 @@ function Screen({ children }: { children: React.ReactNode }) {
   )
 }
 
-function Intro({ name, setName, onStart }: { name: string; setName: (v: string) => void; onStart: () => void }) {
-  const ok = name.trim().length >= 2
+function Brand() {
   return (
-    <div className="flex flex-1 flex-col justify-between gap-10 py-6">
+    <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-3">
         <Neo4jLogo size="sm" />
         <span className="h-5 w-px bg-white/15" />
         <Logo size="sm" />
       </div>
+      <LangToggle size="sm" />
+    </div>
+  )
+}
+
+function Intro({ name, setName, onStart }: { name: string; setName: (v: string) => void; onStart: () => void }) {
+  const { t } = useI18n()
+  const ok = name.trim().length >= 2
+  return (
+    <div className="flex flex-1 flex-col justify-between gap-10 py-6">
+      <Brand />
       <div className="space-y-6">
         <motion.h1
           className="font-display text-[44px] font-bold leading-[1.02] tracking-tight"
@@ -136,29 +148,28 @@ function Intro({ name, setName, onStart }: { name: string; setName: (v: string) 
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          Toque.
+          {t('p.title1')}
           <br />
-          Vire <span className="text-gradient">grafo</span>.
+          {t('p.title2a')} <span className="text-gradient">{t('p.title2b')}</span>.
           <br />
-          Ache sua tribo.
+          {t('p.title3')}
         </motion.h1>
         <p className="max-w-sm text-base leading-relaxed text-white/65">
-          Cada tecla vira um evento no Neo4j. O algoritmo <b className="text-white">FastPath</b> transforma a sua sequência no tempo em um
-          vetor e encontra quem tocou parecido com você.
+          {t('p.introA')} <b className="text-white">FastPath</b> {t('p.introB')}
         </p>
       </div>
       <div className="space-y-3">
-        <label className="font-mono text-[11px] uppercase tracking-[0.25em] text-mute">Como te chamamos?</label>
+        <label className="font-mono text-[11px] uppercase tracking-[0.25em] text-mute">{t('p.nameLabel')}</label>
         <input
           value={name}
           onChange={(e) => setName(e.target.value.slice(0, 24))}
           onKeyDown={(e) => e.key === 'Enter' && ok && onStart()}
-          placeholder="Seu nome ou apelido"
+          placeholder={t('p.namePlaceholder')}
           className="glass w-full rounded-2xl px-5 py-4 font-display text-xl outline-none placeholder:text-white/25 focus:border-white/30"
           autoComplete="off"
         />
         <Button size="lg" className="w-full" disabled={!ok} onClick={onStart}>
-          Entrar no palco
+          {t('p.enter')}
         </Button>
       </div>
     </div>
@@ -166,6 +177,7 @@ function Intro({ name, setName, onStart }: { name: string; setName: (v: string) 
 }
 
 function Recorder({ name, onSubmitted }: { name: string; onSubmitted: (id: string, notes: NoteEvent[]) => void }) {
+  const { t, err } = useI18n()
   const [notes, setNotes] = useState<NoteEvent[]>([])
   const [elapsed, setElapsed] = useState(0)
   const [finished, setFinished] = useState(false)
@@ -217,7 +229,7 @@ function Recorder({ name, onSubmitted }: { name: string; onSubmitted: (id: strin
       const id = await submitPerformance(name, notes)
       onSubmitted(id, notes)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Falha ao enviar')
+      setError(e instanceof Error ? e.message : 'i18n:send_failed')
       setSending(false)
     }
   }
@@ -230,7 +242,7 @@ function Recorder({ name, onSubmitted }: { name: string; onSubmitted: (id: strin
     <div className="flex flex-1 flex-col gap-4">
       <header className="flex items-center justify-between">
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-mute">Tocando como</p>
+          <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-mute">{t('p.playingAs')}</p>
           <p className="font-display text-xl font-semibold">{name}</p>
         </div>
         <TimerRing progress={progress} recording={recording} seconds={Math.ceil((MAX_DURATION_MS - elapsed) / 1000)} />
@@ -238,8 +250,8 @@ function Recorder({ name, onSubmitted }: { name: string; onSubmitted: (id: strin
 
       <div className="glass relative overflow-hidden rounded-3xl p-3">
         <div className="absolute left-4 top-3 z-10 flex items-center gap-2">
-          {recording ? <Chip color="#FF3D71">gravando</Chip> : finished ? <Chip color="#3DDC97">pronto</Chip> : <Chip>aguardando 1ª nota</Chip>}
-          <Chip color="#2EC4FF">{notes.length} eventos</Chip>
+          {recording ? <Chip color="#FF3D71">{t('p.recording')}</Chip> : finished ? <Chip color="#3DDC97">{t('p.ready')}</Chip> : <Chip>{t('p.waitingFirst')}</Chip>}
+          <Chip color="#2EC4FF">{t('common.events', { n: notes.length })}</Chip>
         </div>
         <div className="h-36 pt-7">
           {notes.length ? (
@@ -253,8 +265,9 @@ function Recorder({ name, onSubmitted }: { name: string; onSubmitted: (id: strin
             />
           ) : (
             <div className="flex h-full items-center justify-center text-center text-sm text-white/45">
-              Toque livremente por até 20 segundos.
-              <br />A gravação começa na primeira tecla.
+              {t('p.hint1')}
+              <br />
+              {t('p.hint2')}
             </div>
           )}
         </div>
@@ -265,17 +278,17 @@ function Recorder({ name, onSubmitted }: { name: string; onSubmitted: (id: strin
         <Keyboard onPress={press} />
       </div>
 
-      {error && <p className="text-center text-sm text-[#FF3D71]">{error}</p>}
+      {error && <p className="text-center text-sm text-[#FF3D71]">{err(error)}</p>}
       <div className="grid grid-cols-[auto_auto_1fr] gap-2">
         <Button variant="ghost" onClick={reset} disabled={!notes.length || sending}>
-          Refazer
+          {t('p.redo')}
         </Button>
         <Button variant="soft" onClick={() => (playback.playing ? playback.stop() : playback.play(notes))} disabled={!notes.length}>
           <PlayIcon playing={playback.playing} />
         </Button>
         <Button onClick={send} disabled={!canSend}>
           {sending ? <Spinner color="#05040b" /> : null}
-          {sending ? 'Gravando no grafo' : notes.length < MIN_NOTES ? `Mínimo ${MIN_NOTES} notas` : 'Enviar melodia'}
+          {sending ? t('p.saving') : notes.length < MIN_NOTES ? t('p.minNotes', { n: MIN_NOTES }) : t('p.send')}
         </Button>
       </div>
     </div>
@@ -308,47 +321,56 @@ function TimerRing({ progress, recording, seconds }: { progress: number; recordi
 }
 
 function Waiting({ name, notes }: { name: string; notes: NoteEvent[] }) {
+  const { t } = useI18n()
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-10 text-center">
-      <div className="relative flex h-44 w-44 items-center justify-center">
-        {[0, 0.6, 1.2].map((d) => (
-          <span
-            key={d}
-            className="absolute inset-0 rounded-full border border-white/30"
-            style={{ animation: `pulse-ring 2.4s ${d}s ease-out infinite` }}
+    <div className="flex flex-1 flex-col gap-6 py-2">
+      <div className="flex justify-end">
+        <LangToggle size="sm" />
+      </div>
+      <div className="flex flex-1 flex-col items-center justify-center gap-10 text-center">
+        <div className="relative flex h-44 w-44 items-center justify-center">
+          {[0, 0.6, 1.2].map((d) => (
+            <span
+              key={d}
+              className="absolute inset-0 rounded-full border border-white/30"
+              style={{ animation: `pulse-ring 2.4s ${d}s ease-out infinite` }}
+            />
+          ))}
+          <motion.div
+            className="h-28 w-28 rounded-full"
+            style={{ background: 'conic-gradient(from 0deg,#2EC4FF,#9B5CFF,#FF4FD8,#FFD23F,#2EC4FF)', filter: 'blur(1px)' }}
+            animate={{ rotate: 360 }}
+            transition={{ repeat: Infinity, duration: 6, ease: 'linear' }}
           />
-        ))}
-        <motion.div
-          className="h-28 w-28 rounded-full"
-          style={{ background: 'conic-gradient(from 0deg,#2EC4FF,#9B5CFF,#FF4FD8,#FFD23F,#2EC4FF)', filter: 'blur(1px)' }}
-          animate={{ rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 6, ease: 'linear' }}
-        />
-        <div className="absolute h-24 w-24 rounded-full bg-ink/80 backdrop-blur" />
-        <span className="absolute font-display text-3xl font-bold">{notes.length}</span>
-      </div>
-      <div className="space-y-3">
-        <h2 className="font-display text-3xl font-bold">Sua melodia virou grafo</h2>
-        <p className="mx-auto max-w-xs text-white/60">
-          {notes.length} eventos ligados por <span className="font-mono text-cyan">:NEXT_EVENT</span>. Agora é com o palco: assim que o FastPath rodar, sua
-          tribo aparece aqui.
-        </p>
-      </div>
-      <div className="glass w-full max-w-md rounded-3xl p-4">
-        <ChainPreview name={name} notes={notes} max={6} />
-      </div>
-      <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.2em] text-mute">
-        <Spinner /> aguardando o FastPath
+          <div className="absolute h-24 w-24 rounded-full bg-ink/80 backdrop-blur" />
+          <span className="absolute font-display text-3xl font-bold">{notes.length}</span>
+        </div>
+        <div className="space-y-3">
+          <h2 className="font-display text-3xl font-bold">{t('p.waitTitle')}</h2>
+          <p className="mx-auto max-w-xs text-white/60">
+            {t('p.waitTextA', { n: notes.length })} <span className="font-mono text-cyan">:NEXT_EVENT</span>. {t('p.waitTextB')}
+          </p>
+        </div>
+        <div className="glass w-full max-w-md rounded-3xl p-4">
+          <ChainPreview name={name} notes={notes} max={6} />
+        </div>
+        <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.2em] text-mute">
+          <Spinner /> {t('p.waitingFastPath')}
+        </div>
       </div>
     </div>
   )
 }
 
 function Reveal({ name, notes, result, onAgain }: { name: string; notes: NoteEvent[]; result: MyResult; onAgain: () => void }) {
+  const { t, loc, lang } = useI18n()
   const playback = usePlayback()
   const color = tribeColor(result.tribeId)
   return (
     <div className="flex flex-1 flex-col justify-center gap-5 py-4" style={{ perspective: 1200 }}>
+      <div className="flex justify-end">
+        <LangToggle size="sm" />
+      </div>
       <motion.div
         initial={{ rotateY: 180, scale: 0.85, opacity: 0 }}
         animate={{ rotateY: 0, scale: 1, opacity: 1 }}
@@ -357,32 +379,32 @@ function Reveal({ name, notes, result, onAgain }: { name: string; notes: NoteEve
         style={{ ['--from' as string]: color, ['--to' as string]: '#FF4FD8', background: `radial-gradient(120% 80% at 0% 0%, ${color}30, transparent 60%), linear-gradient(180deg,#14122a,#0a0916)` }}
       >
         <div className="flex items-center justify-between">
-          <Chip color={color}>tribo</Chip>
+          <Chip color={color}>{t('p.tribe')}</Chip>
           <Neo4jLogo size="sm" className="text-white/70" />
         </div>
         <p className="mt-3 font-display text-lg font-semibold" style={{ color }}>
-          {result.tribeName}
+          {loc(result, 'tribeName')}
         </p>
-        <h2 className="mt-5 font-display text-[38px] font-bold leading-[1.02] tracking-tight">{result.profileTitle}</h2>
-        <p className="mt-4 text-[15px] leading-relaxed text-white/75">{result.profileText}</p>
+        <h2 className="mt-5 font-display text-[38px] font-bold leading-[1.02] tracking-tight">{loc(result, 'profileTitle')}</h2>
+        <p className="mt-4 text-[15px] leading-relaxed text-white/75">{loc(result, 'profileText')}</p>
 
         <div className="mt-6 h-24 rounded-2xl bg-black/25 p-2">
           <PianoRoll notes={notes} playhead={playback.playhead} activeIndex={playback.activeIndex} height={80} compact />
         </div>
 
         <div className="mt-5 grid grid-cols-3 gap-2 text-center">
-          <Stat label="notas" value={String(notes.length)} />
-          <Stat label="notas/s" value={(result.notesPerSecond ?? 0).toFixed(1)} />
-          <Stat label="originalidade" value={`${result.originality ?? 0}%`} />
+          <Stat label={t('p.statNotes')} value={String(notes.length)} />
+          <Stat label={t('common.nps')} value={(result.notesPerSecond ?? 0).toFixed(1)} />
+          <Stat label={t('p.statOriginality')} value={`${result.originality ?? 0}%`} />
         </div>
 
         {result.soulmate && (
           <div className="mt-5 flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3">
             <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-mute">alma gêmea musical</p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-mute">{t('p.soulmate')}</p>
               <p className="font-display text-lg font-semibold">
-                {result.soulmate}
-                {result.soulmateIsBot && <span className="ml-2 text-xs text-white/40">(eco robô)</span>}
+                {result.soulmateIsBot ? botName(result.soulmate, lang) : result.soulmate}
+                {result.soulmateIsBot && <span className="ml-2 text-xs text-white/40">{t('p.botTag')}</span>}
               </p>
             </div>
             {result.score != null && <span className="font-mono text-2xl font-bold text-gradient">{Math.round(result.score * 100)}</span>}
@@ -392,10 +414,10 @@ function Reveal({ name, notes, result, onAgain }: { name: string; notes: NoteEve
       </motion.div>
       <div className="grid grid-cols-2 gap-2">
         <Button variant="soft" onClick={() => (playback.playing ? playback.stop() : playback.play(notes))}>
-          <PlayIcon playing={playback.playing} /> <span className="whitespace-nowrap">Ouvir de novo</span>
+          <PlayIcon playing={playback.playing} /> <span className="whitespace-nowrap">{t('p.listenAgain')}</span>
         </Button>
         <Button variant="ghost" onClick={onAgain}>
-          Tocar outra
+          {t('p.playAnother')}
         </Button>
       </div>
     </div>

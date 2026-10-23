@@ -1,3 +1,4 @@
+import type { Lang } from './i18n'
 import type { AskResult, Composition, Health, Job, Lobby, Mode, StageState, Verdict } from './types'
 
 const params = new URLSearchParams(window.location.search)
@@ -25,11 +26,11 @@ export const api = {
   run: () => post<Job>('/api/run'),
   warmup: () => post<{ session: string }>('/api/session/warmup'),
   deleteSession: () => call<{ deleted: boolean }>('/api/session', { method: 'DELETE' }),
-  explain: (a: string, b: string, mode: Mode) =>
-    post<{ text: string; scores: { cosine: number; euclidean: number; score: number }; verdict: Verdict }>('/api/explain', { a, b, mode }),
+  explain: (a: string, b: string, mode: Mode, lang: Lang) =>
+    post<{ text: string; scores: { cosine: number; euclidean: number; score: number }; verdict: Verdict }>('/api/explain', { a, b, mode, lang }),
   compose: (tribeId: string) => post<Composition>('/api/compose', { tribeId }),
-  ask: (question: string) => post<AskResult>('/api/ask', { question }),
-  suggestions: () => call<string[]>('/api/ask/suggestions'),
+  ask: (question: string, lang: Lang) => post<AskResult>('/api/ask', { question, lang }),
+  suggestions: (lang: Lang) => call<string[]>(`/api/ask/suggestions?lang=${lang}`),
   seed: (perArchetype = 6) => post<{ bots: number }>('/api/seed', { perArchetype }),
   reset: (keepBots = true) => post<{ removed: number }>('/api/reset', { keepBots }),
 }

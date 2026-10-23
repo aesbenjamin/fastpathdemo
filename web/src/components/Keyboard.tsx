@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { IS_LIGHT } from '../lib/device'
+import { useI18n } from '../lib/i18n'
 import { NOTES } from '../lib/notes'
 
 type Spark = { x: number; y: number; vx: number; vy: number; life: number; color: string; size: number }
 
 /** Eight glowing pads. Fires on pointerdown for zero-latency, multi-touch playing. */
 export function Keyboard({ onPress, disabled }: { onPress: (code: number) => void; disabled?: boolean }) {
+  const { noteShort } = useI18n()
   const [active, setActive] = useState<Record<number, number>>({})
   const canvas = useRef<HTMLCanvasElement>(null)
   const sparks = useRef<Spark[]>([])
@@ -103,7 +105,7 @@ export function Keyboard({ onPress, disabled }: { onPress: (code: number) => voi
                 style={{ background: 'linear-gradient(180deg, rgba(255,255,255,.22), transparent)' }}
               />
               <span className="font-display text-xl font-semibold drop-shadow" style={{ color: on ? '#05040b' : n.color }}>
-                {n.short}
+                {noteShort(n.code)}
               </span>
               <span className="font-mono text-[10px] opacity-60" style={{ color: on ? '#05040b' : '#fff' }}>
                 {n.name}

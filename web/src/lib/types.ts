@@ -26,7 +26,11 @@ export type Performance = {
   createdAt: string
   profileTitle?: string | null
   profileText?: string | null
+  profileTitle_en?: string | null
+  profileText_en?: string | null
+  name_en?: string | null
   generatedText?: string | null
+  generatedText_en?: string | null
   originality?: number | null
   x_full?: number | null
   y_full?: number | null
@@ -45,6 +49,8 @@ export type Tribe = {
   index: number
   name: string
   description: string
+  name_en?: string | null
+  description_en?: string | null
   size: number
   facts: {
     size: number
@@ -64,6 +70,7 @@ export type Similar = {
   euclidean: number
   score: number
   explanation?: string | null
+  explanation_en?: string | null
 }
 
 export type JobStep = { id: string; label: string }
@@ -75,6 +82,8 @@ export type Job = {
   steps: JobStep[]
   backend?: 'aga' | 'local'
   warning?: string | null
+  warningKey?: string | null
+  warningDetail?: string | null
   error?: string
   elapsedSeconds?: number
   people?: number
@@ -111,6 +120,8 @@ export type Composition = {
   performanceId: string
   title: string
   text: string
+  title_en?: string | null
+  text_en?: string | null
   generatedBy: 'llm' | 'template'
   notes: NoteEvent[]
   targetTribe: string

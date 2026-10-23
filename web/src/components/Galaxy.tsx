@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useMemo, useState } from 'react'
+import { useI18n } from '../lib/i18n'
 import { tribeColor } from '../lib/notes'
 import type { Mode, Performance, Similar, Tribe } from '../lib/types'
 
@@ -33,6 +34,7 @@ function starPath(r: number) {
 
 /** Every melody is a point; distance = FastPath similarity; color = tribe. */
 export function Galaxy({ performances, tribes, similar = [], mode, selectedId, onSelect, showBots = true, landingId, compact }: Props) {
+  const { t: tr, loc, name } = useI18n()
   const [hover, setHover] = useState<string | null>(null)
   const points = useMemo(
     () =>
@@ -53,24 +55,24 @@ export function Galaxy({ performances, tribes, similar = [], mode, selectedId, o
         const cy = members.reduce((s, m) => s + m.y, 0) / members.length
         const r = Math.max(60, Math.sqrt(members.reduce((s, m) => s + (m.x - cx) ** 2 + (m.y - cy) ** 2, 0) / members.length) * 1.7)
         const top = Math.min(...members.map((m) => m.y))
-        return { t, cx, cy, r, lx: cx, ly: top - 24 }
+        return { t, label: loc(t, 'name'), cx, cy, r, lx: cx, ly: top - 24 }
       })
-      .filter(Boolean) as { t: Tribe; cx: number; cy: number; r: number; lx: number; ly: number }[]
+      .filter(Boolean) as { t: Tribe; label: string; cx: number; cy: number; r: number; lx: number; ly: number }[]
     const placed = [...list].sort((a, b) => b.ly - a.ly)
     for (let i = 0; i < placed.length; i++) {
       for (let j = 0; j < i; j++) {
         const a = placed[i]
         const b = placed[j]
-        const minDx = (a.t.name.length + b.t.name.length) * 4.6
+        const minDx = (a.label.length + b.label.length) * 4.6
         if (Math.abs(a.lx - b.lx) < minDx && Math.abs(a.ly - b.ly) < 26) a.ly = b.ly - 26
       }
     }
     for (const n of list) {
       n.ly = Math.max(22, n.ly)
-      n.lx = Math.min(W - n.t.name.length * 5, Math.max(n.t.name.length * 5, n.lx))
+      n.lx = Math.min(W - n.label.length * 5, Math.max(n.label.length * 5, n.lx))
     }
     return list
-  }, [tribes, points, mode])
+  }, [tribes, points, mode, loc])
 
   const focus = hover ?? selectedId ?? null
   const links = focus ? similar.filter((s) => s.mode === mode && s.source === focus && byId.has(s.target)) : []
@@ -92,7 +94,7 @@ export function Galaxy({ performances, tribes, similar = [], mode, selectedId, o
           </filter>
         </defs>
 
-        {nebulae.map(({ t, cx, cy, r, lx, ly }) => (
+        {nebulae.map(({ t, label, cx, cy, r, lx, ly }) => (
           <motion.g key={t.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1.2, delay: 0.6 }}>
             <motion.circle animate={{ cx, cy, r }} transition={{ type: 'spring', stiffness: 40, damping: 16 }} fill={tribeColor(t.id)} opacity={0.16} filter="url(#gx-nebula)" />
             {!compact && (
@@ -106,7 +108,7 @@ export function Galaxy({ performances, tribes, similar = [], mode, selectedId, o
                 fill={tribeColor(t.id)}
                 style={{ paintOrder: 'stroke', stroke: '#05040b', strokeWidth: 5 }}
               >
-                {t.name}
+                {label}
               </motion.text>
             )}
           </motion.g>
@@ -166,7 +168,7 @@ export function Galaxy({ performances, tribes, similar = [], mode, selectedId, o
               )}
               {human && !compact && (
                 <text y={r + 15} textAnchor="middle" fontSize={12} fill="#fff" opacity={0.85} className="font-sans" style={{ paintOrder: 'stroke', stroke: '#05040b', strokeWidth: 4 }}>
-                  {p.name.slice(0, 14)}
+                  {name(p).slice(0, 14)}
                 </text>
               )}
             </motion.g>
@@ -184,10 +186,10 @@ export function Galaxy({ performances, tribes, similar = [], mode, selectedId, o
             className="glass pointer-events-none absolute z-20 max-w-64 rounded-2xl px-4 py-3"
             style={{ left: `${(hovered.x / W) * 100}%`, top: `${(hovered.y / H) * 100}%`, transform: 'translate(-50%, calc(-100% - 18px))' }}
           >
-            <p className="font-display font-semibold">{hovered.p.name}</p>
-            {hovered.p.profileTitle && <p className="text-sm text-white/70">{hovered.p.profileTitle}</p>}
+            <p className="font-display font-semibold">{name(hovered.p)}</p>
+            {hovered.p.profileTitle && <p className="text-sm text-white/70">{loc(hovered.p, 'profileTitle')}</p>}
             <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-mute">
-              {hovered.p.noteCount} notas · {hovered.p.facts?.notesPerSecond ?? '-'} n/s
+              {tr('common.notes', { n: hovered.p.noteCount })} · {hovered.p.facts?.notesPerSecond ?? '-'} n/s
             </p>
           </motion.div>
         )}

@@ -97,7 +97,7 @@ def fetch_performances() -> list[dict]:
         }
         RETURN p {
           .id, .name, .isBot, .isGenerated, .archetype, .durationMs, .noteCount,
-          .profileTitle, .profileText, .originality,
+          .profileTitle, .profileText, .profileTitle_en, .profileText_en, .name_en, .originality,
           .x_full, .y_full, .x_notes, .y_notes, .tribe_full, .tribe_notes,
           createdAt: toString(p.createdAt), nodeId: id(p)
         } AS p, notes
@@ -121,7 +121,8 @@ def fetch_similar() -> list[dict]:
         """
         MATCH (a:Performance)-[s:SIMILAR_TO]->(b:Performance)
         RETURN a.id AS source, b.id AS target, s.mode AS mode, s.rank AS rank,
-               s.cosine AS cosine, s.euclidean AS euclidean, s.score AS score, s.explanation AS explanation
+               s.cosine AS cosine, s.euclidean AS euclidean, s.score AS score,
+               s.explanation AS explanation, s.explanation_en AS explanation_en
         """
     )
 
@@ -176,11 +177,12 @@ def write_results(perf_rows: list[dict], tribes: list[dict], similar: list[dict]
     )
 
 
-def save_explanation(source: str, target: str, mode: str, text: str) -> None:
+def save_explanation(source: str, target: str, mode: str, text: str, lang: str = "pt") -> None:
+    prop = "explanation_en" if lang == "en" else "explanation"
     run(
-        """
-        MATCH (:Performance {id: $a})-[s:SIMILAR_TO {mode: $mode}]-(:Performance {id: $b})
-        SET s.explanation = $text
+        f"""
+        MATCH (:Performance {{id: $a}})-[s:SIMILAR_TO {{mode: $mode}}]-(:Performance {{id: $b}})
+        SET s.{prop} = $text
         """,
         a=source,
         b=target,

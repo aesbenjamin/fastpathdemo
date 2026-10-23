@@ -1,16 +1,20 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { QRCodeSVG } from 'qrcode.react'
+import { useI18n, type Lang } from '../../../lib/i18n'
 import { NOTES } from '../../../lib/notes'
 import type { Lobby as LobbyData } from '../../../lib/types'
 
-export function participantUrl() {
-  const fromEnv = import.meta.env.VITE_PUBLIC_URL as string | undefined
-  if (fromEnv) return fromEnv
-  return `${window.location.origin}${window.location.pathname}`
+export function participantUrl(lang?: Lang) {
+  const base = (import.meta.env.VITE_PUBLIC_URL as string | undefined) || `${window.location.origin}${window.location.pathname}`
+  if (!lang) return base
+  const url = new URL(base)
+  url.searchParams.set('lang', lang)
+  return url.toString()
 }
 
 export function Lobby({ lobby }: { lobby: LobbyData | null }) {
-  const url = participantUrl()
+  const { t, lang } = useI18n()
+  const url = participantUrl(lang)
   const count = lobby?.count ?? 0
   return (
     <div className="grid h-full grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] items-center gap-14 px-16">
@@ -20,23 +24,23 @@ export function Lobby({ lobby }: { lobby: LobbyData | null }) {
             <QRCodeSVG value={url} size={340} bgColor="#ffffff" fgColor="#05040b" level="M" />
           </div>
         </div>
-        <p className="font-mono text-sm text-white/60">{url.replace(/^https?:\/\//, '')}</p>
+        <p className="font-mono text-sm text-white/60">{participantUrl().replace(/^https?:\/\//, '')}</p>
       </motion.div>
 
       <div className="space-y-10">
         <div>
-          <p className="font-mono text-sm uppercase tracking-[0.35em] text-mute">aponte a câmera</p>
+          <p className="font-mono text-sm uppercase tracking-[0.35em] text-mute">{t('lobby.scan')}</p>
           <h1 className="mt-4 font-display text-7xl font-bold leading-[0.95] tracking-tight">
-            Toque uma melodia.
+            {t('lobby.title1')}
             <br />
-            <span className="text-gradient">O grafo escuta.</span>
+            <span className="text-gradient">{t('lobby.title2')}</span>
           </h1>
         </div>
 
         <div className="flex items-end gap-12">
-          <Counter value={count} label="pessoas tocaram" />
-          <Counter value={lobby?.totalNotes ?? 0} label="eventos no grafo" small />
-          <Counter value={lobby?.bots ?? 0} label="ecos robôs" small />
+          <Counter value={count} label={t('lobby.people')} />
+          <Counter value={lobby?.totalNotes ?? 0} label={t('lobby.events')} small />
+          <Counter value={lobby?.bots ?? 0} label={t('lobby.bots')} small />
         </div>
 
         <div className="flex min-h-40 flex-wrap content-start gap-2.5">

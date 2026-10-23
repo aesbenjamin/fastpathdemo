@@ -73,7 +73,9 @@ O palco pode rodar direto do Pages, falando com a API local: `https://<usuario>.
 
 ## Roteiro da apresentação (~15 min)
 
-Atalhos do palco: `←` `→` ou `1`–`7` trocam de ato, `m` alterna o modo "notas + tempo" / "só notas", `f` entra em tela cheia, e a engrenagem no canto abre os controles (aquecer sessão AGA, criar ecos robôs, limpar pessoas, encerrar sessão).
+Atalhos do palco: `←` `→` ou `1`–`7` trocam de ato, `m` alterna o modo "notas + tempo" / "só notas", `l` alterna o idioma, `f` entra em tela cheia, e a engrenagem no canto abre os controles (aquecer sessão AGA, criar ecos robôs, limpar pessoas, encerrar sessão).
+
+**Idioma (PT / EN):** o botão PT/EN no topo do palco e no celular troca toda a interface. O QR do Lobby leva o idioma atual do palco (`?lang=en`), então quem escaneia já abre no mesmo idioma, e cada pessoa ainda pode trocar no próprio celular. Os textos da IA (nomes e descrições das tribos, perfis, composições) são gerados nos dois idiomas a cada rodada do FastPath; a explicação do Duelo e as respostas do Pergunte são geradas no idioma escolhido. Resultados de rodadas anteriores a essa versão aparecem em português até o FastPath rodar de novo.
 
 **Antes de começar:** abra o palco e clique em *Aquecer sessão AGA* na engrenagem. A sessão leva alguns minutos para subir na primeira vez e cerca de 1 minuto para conectar depois. **Depois do evento:** clique em *Encerrar sessão AGA*, porque a sessão é cobrada enquanto existir.
 

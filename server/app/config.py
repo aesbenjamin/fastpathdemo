@@ -99,24 +99,33 @@ settings = Settings()
 DEFAULT_THRESHOLDS = {"very": 0.80, "similar": 0.65, "weak": 0.50}
 
 
-def verdict(score: float, thresholds: dict | None = None, reference: dict | None = None) -> dict:
+VERDICT_LABELS = {
+    "pt": {"very": "muito parecidas", "similar": "parecidas", "weak": "levemente parecidas", "different": "diferentes"},
+    "en": {"very": "very similar", "similar": "similar", "weak": "slightly similar", "different": "different"},
+}
+
+
+def verdict(score: float, thresholds: dict | None = None, reference: dict | None = None, lang: str = "pt") -> dict:
     """Classify a pair score into a human-readable verdict shared by the API and the LLM prompt."""
     th = thresholds or DEFAULT_THRESHOLDS
     if score >= th["very"]:
-        level, label = "very", "muito parecidas"
+        level = "very"
     elif score >= th["similar"]:
-        level, label = "similar", "parecidas"
+        level = "similar"
     elif score >= th["weak"]:
-        level, label = "weak", "levemente parecidas"
+        level = "weak"
     else:
-        level, label = "different", "diferentes"
+        level = "different"
     return {
         "level": level,
-        "label": label,
+        "label": VERDICT_LABELS.get(lang, VERDICT_LABELS["pt"])[level],
         "similar": level in ("very", "similar"),
         "thresholds": {k: round(float(th[k]), 2) for k in ("very", "similar", "weak")},
         "reference": reference or {},
     }
 
 MODES = ("full", "notes")
-MODE_LABELS = {"full": "notas + tempo", "notes": "só notas"}
+MODE_LABELS = {
+    "pt": {"full": "notas + tempo", "notes": "só notas"},
+    "en": {"full": "notes + time", "notes": "notes only"},
+}

@@ -8,7 +8,7 @@ import traceback
 
 import numpy as np
 
-from . import analytics, db, fastpath_local, llm
+from . import analytics, db, fastpath_local, i18n, llm
 from .config import DEFAULT_THRESHOLDS, MODE_LABELS, MODES, settings, verdict
 from .facts import melody_facts, tribe_facts
 from .fastpath_aga import aga
@@ -41,7 +41,7 @@ def _set_step(step: str) -> None:
 
 
 def _compute_embeddings(performances: list[dict]):
-    """Returns (embeddings, knn candidates or None, backend used, warning)."""
+    """Returns (embeddings, knn candidates or None, backend used, warning detail or None)."""
     if settings.backend == "aga":
         try:
             emb, knn = aga.run(performances, settings.knn_candidates, _set_step)
@@ -52,7 +52,7 @@ def _compute_embeddings(performances: list[dict]):
             log.exception("AGA falhou")
             if not settings.fallback_local:
                 raise
-            warning = f"Aura Graph Analytics indisponível ({exc.__class__.__name__}): usando FastPath local simulado"
+            warning = exc.__class__.__name__
     else:
         warning = None
 
@@ -71,10 +71,15 @@ def run_pipeline() -> None:
     db.ensure_schema()
     performances = db.fetch_performances()
     if len(performances) < 3:
-        raise RuntimeError("São necessárias pelo menos 3 melodias para rodar o FastPath")
+        raise RuntimeError("i18n:min_melodies")
 
     embeddings, knn, backend, warning = _compute_embeddings(performances)
-    job.update(backend=backend, warning=warning)
+    job.update(
+        backend=backend,
+        warning=f"Aura Graph Analytics indisponível ({warning}): usando FastPath local simulado" if warning else None,
+        warningKey="aga_fallback" if warning else None,
+        warningDetail=warning,
+    )
 
     _set_step("rerank")
     perfs = [p for p in performances if p["id"] in embeddings]
@@ -110,7 +115,7 @@ def run_pipeline() -> None:
         for t in mode_tribes:
             t.update(names[t["id"]])
         tribes.extend(mode_tribes)
-    tribe_name = {t["id"]: t["name"] for t in tribes}
+    tribe_by_id = {t["id"]: t for t in tribes}
 
     first_neighbor = {r["source"]: r["target"] for r in results["full"]["similar"] if r["rank"] == 1}
     people = []
@@ -119,10 +124,14 @@ def run_pipeline() -> None:
         if p.get("isBot") or p.get("isGenerated"):
             continue
         mate = by_id.get(first_neighbor.get(pid, ""))
+        tribe = tribe_by_id[f"full-{results['full']['labels'][i]}"]
         people.append({
             "id": pid, "name": p["name"], "facts": facts[pid], "originality": originality[pid],
-            "tribeName": tribe_name[f"full-{results['full']['labels'][i]}"],
+            "tribeName": tribe["name"], "tribeName_en": tribe["name_en"],
             "soulmate": None if mate is None else (mate["name"] if not mate.get("isBot") else f"o eco robô {mate['name']}"),
+            "soulmate_en": None if mate is None else (
+                i18n.display_name(mate, "en") if not mate.get("isBot") else f"the echo bot {i18n.display_name(mate, 'en')}"
+            ),
         })
     profiles = llm.profiles(people) if people else {}
 
@@ -143,12 +152,14 @@ def run_pipeline() -> None:
             props[f"y_{mode}"] = float(results[mode]["coords"][i, 1])
             props[f"tribe_{mode}"] = f"{mode}-{int(results[mode]['labels'][i])}"
         if pid in profiles:
-            props["profileTitle"] = profiles[pid]["title"]
-            props["profileText"] = profiles[pid]["text"]
+            for field in ("title", "text"):
+                props[f"profile{field.title()}"] = profiles[pid][field]
+                props[f"profile{field.title()}_en"] = profiles[pid][f"{field}_en"]
         rows.append({"id": pid, "props": props})
 
     db_tribes = [
         {"id": t["id"], "mode": t["mode"], "index": t["index"], "name": t["name"], "description": t["description"],
+         "name_en": t["name_en"], "description_en": t["description_en"],
          "size": len(t["memberIds"]), "memberIds": t["memberIds"], "factsJson": json.dumps(t["facts"], ensure_ascii=False)}
         for t in tribes
     ]
@@ -185,13 +196,15 @@ def start_job() -> dict:
 def state() -> dict:
     performances = db.fetch_performances()
     extra = {r["id"]: r for r in db.run(
-        "MATCH (p:Performance) RETURN p.id AS id, p.factsJson AS facts, p.generatedText AS generatedText, p.emb_full AS emb"
+        "MATCH (p:Performance) RETURN p.id AS id, p.factsJson AS facts, p.generatedText AS generatedText, "
+        "p.generatedText_en AS generatedText_en, p.emb_full AS emb"
     )}
     for p in performances:
         p.pop("nodeId", None)
         e = extra.get(p["id"], {})
         p["facts"] = json.loads(e["facts"]) if e.get("facts") else melody_facts(p["notes"])
         p["generatedText"] = e.get("generatedText")
+        p["generatedText_en"] = e.get("generatedText_en")
         p["emb_full"] = [round(v, 4) for v in e["emb"]] if e.get("emb") else None
     tribes = db.fetch_tribes()
     for t in tribes:
@@ -229,13 +242,15 @@ def score_thresholds(mode: str) -> tuple[dict, dict]:
     return th, reference
 
 
-def explain(a_id: str, b_id: str, mode: str) -> dict:
+def explain(a_id: str, b_id: str, mode: str, lang: str = "pt") -> dict:
+    lang = i18n.norm_lang(lang)
     performances = {p["id"]: p for p in db.fetch_performances()}
     a, b = performances[a_id], performances[b_id]
     rel = db.run(
-        """
-        MATCH (:Performance {id: $a})-[s:SIMILAR_TO {mode: $mode}]-(:Performance {id: $b})
-        RETURN s.cosine AS cosine, s.euclidean AS euclidean, s.score AS score, s.explanation AS explanation
+        f"""
+        MATCH (:Performance {{id: $a}})-[s:SIMILAR_TO {{mode: $mode}}]-(:Performance {{id: $b}})
+        RETURN s.cosine AS cosine, s.euclidean AS euclidean, s.score AS score,
+               s.{'explanation_en' if lang == 'en' else 'explanation'} AS explanation
         ORDER BY s.score DESC LIMIT 1
         """,
         a=a_id, b=b_id, mode=mode,
@@ -243,7 +258,7 @@ def explain(a_id: str, b_id: str, mode: str) -> dict:
     th, reference = score_thresholds(mode)
     if rel:
         scores = {k: rel[0][k] for k in ("cosine", "euclidean", "score")}
-        v = verdict(scores["score"], th, reference)
+        v = verdict(scores["score"], th, reference, lang)
         # cached texts were written for similar pairs; regenerate if the calibrated verdict disagrees
         if rel[0]["explanation"] and v["similar"]:
             return {"text": rel[0]["explanation"], "scores": scores, "verdict": v, "cached": True}
@@ -255,16 +270,17 @@ def explain(a_id: str, b_id: str, mode: str) -> dict:
         euclidean = 1.0 / (1.0 + float(np.linalg.norm(va / scale - vb / scale)))
         scores = {"cosine": round(cosine, 4), "euclidean": round(euclidean, 4),
                   "score": round(settings.cosine_weight * cosine + (1 - settings.cosine_weight) * euclidean, 4)}
-    v = verdict(scores["score"], th, reference)
+    v = verdict(scores["score"], th, reference, lang)
     text = llm.explain(
-        {"name": a["name"], "facts": melody_facts(a["notes"])},
-        {"name": b["name"], "facts": melody_facts(b["notes"])},
+        {"name": i18n.display_name(a, lang), "facts": i18n.facts(melody_facts(a["notes"]), lang)},
+        {"name": i18n.display_name(b, lang), "facts": i18n.facts(melody_facts(b["notes"]), lang)},
         scores,
-        MODE_LABELS[mode],
+        MODE_LABELS[lang][mode],
         v,
+        lang,
     )
     if rel:
-        db.save_explanation(a_id, b_id, mode, text)
+        db.save_explanation(a_id, b_id, mode, text, lang)
     return {"text": text, "scores": scores, "verdict": v, "cached": False}
 
 
@@ -277,7 +293,7 @@ def _load_cache() -> None:
     emb = db.fetch_embeddings()
     perfs = [p for p in performances if p["id"] in emb and p.get(f"x_full") is not None]
     if not perfs:
-        raise RuntimeError("Rode o FastPath antes de compor")
+        raise RuntimeError("i18n:run_first")
     ids = [p["id"] for p in perfs]
     results = {}
     for mode in MODES:
@@ -300,7 +316,7 @@ def compose(tribe_id: str) -> dict:
     _load_cache()
     tribe_rows = db.run("MATCH (t:Tribe {id: $id}) RETURN t {.*} AS t", id=tribe_id)
     if not tribe_rows:
-        raise RuntimeError("Tribo não encontrada")
+        raise RuntimeError("i18n:tribe_not_found")
     tribe = tribe_rows[0]["t"]
     tribe["facts"] = json.loads(tribe.get("factsJson") or "{}")
     mode = tribe["mode"]
@@ -321,8 +337,11 @@ def compose(tribe_id: str) -> dict:
     ]
     composition = llm.compose(tribe, examples)
     perf_id = db.create_performance(composition["title"], composition["notes"], is_generated=True, archetype="ia")
-    db.run("MATCH (p:Performance {id: $id}) SET p.generatedText = $text, p.composedFor = $tribe",
-           id=perf_id, text=composition["text"], tribe=tribe_id)
+    db.run(
+        "MATCH (p:Performance {id: $id}) SET p.generatedText = $text, p.generatedText_en = $text_en, "
+        "p.name_en = $title_en, p.composedFor = $tribe",
+        id=perf_id, text=composition["text"], text_en=composition["text_en"], title_en=composition["title_en"], tribe=tribe_id,
+    )
 
     new_perf = {"id": perf_id, "notes": composition["notes"]}
     if _cache.get("backend") == "aga" or (settings.backend == "aga" and aga.status == "ready"):
@@ -377,6 +396,8 @@ def compose(tribe_id: str) -> dict:
         "performanceId": perf_id,
         "title": composition["title"],
         "text": composition["text"],
+        "title_en": composition["title_en"],
+        "text_en": composition["text_en"],
         "generatedBy": composition["generatedBy"],
         "notes": composition["notes"],
         "targetTribe": tribe_id,

@@ -91,14 +91,15 @@ class ExplainBody(BaseModel):
     a: str
     b: str
     mode: str = "full"
+    lang: str = "pt"
 
 
 @app.post("/api/explain")
 def explain(body: ExplainBody) -> dict:
     try:
-        return pipeline.explain(body.a, body.b, body.mode)
+        return pipeline.explain(body.a, body.b, body.mode, body.lang)
     except KeyError:
-        raise HTTPException(404, "Performance não encontrada")
+        raise HTTPException(404, "i18n:performance_not_found")
 
 
 class ComposeBody(BaseModel):
@@ -115,16 +116,17 @@ def compose(body: ComposeBody) -> dict:
 
 class AskBody(BaseModel):
     question: str
+    lang: str = "pt"
 
 
 @app.post("/api/ask")
 def ask(body: AskBody) -> dict:
-    return ask_module.ask(body.question)
+    return ask_module.ask(body.question, body.lang)
 
 
 @app.get("/api/ask/suggestions")
-def suggestions() -> list[str]:
-    return ask_module.SUGGESTIONS
+def suggestions(lang: str = "pt") -> list[str]:
+    return ask_module.suggestions(lang)
 
 
 class SeedBody(BaseModel):
@@ -149,7 +151,10 @@ def reset(body: ResetBody) -> dict:
     where = "NOT p.isBot" if body.keepBots else "true"
     removed = db.delete_performances(where)
     db.clear_results()
-    db.run("MATCH (p:Performance) REMOVE p.profileTitle, p.profileText, p.tribe_full, p.tribe_notes, p.x_full, p.y_full, p.x_notes, p.y_notes, p.originality")
+    db.run(
+        "MATCH (p:Performance) REMOVE p.profileTitle, p.profileText, p.profileTitle_en, p.profileText_en, "
+        "p.tribe_full, p.tribe_notes, p.x_full, p.y_full, p.x_notes, p.y_notes, p.originality"
+    )
     pipeline.job.update(status="idle", step=None, done=[])
     pipeline._cache.clear()
     return {"removed": removed}

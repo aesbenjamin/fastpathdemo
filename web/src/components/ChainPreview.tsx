@@ -1,8 +1,10 @@
 import { motion } from 'framer-motion'
+import { useI18n } from '../lib/i18n'
 import { NOTES, type NoteEvent } from '../lib/notes'
 
 /** Stylised (:Performance)-[:FIRST_EVENT]->(:NoteEvent)-[:NEXT_EVENT]->... path. */
 export function ChainPreview({ name, notes, max = 9, animate = true }: { name: string; notes: NoteEvent[]; max?: number; animate?: boolean }) {
+  const { t, noteShort } = useI18n()
   const shown = notes.slice(0, max)
   const rest = notes.length - shown.length
   return (
@@ -31,11 +33,11 @@ export function ChainPreview({ name, notes, max = 9, animate = true }: { name: s
             className="flex h-10 w-10 items-center justify-center rounded-full font-display text-[11px] font-bold text-ink"
             style={{ background: NOTES[n.code].color, boxShadow: `0 0 16px ${NOTES[n.code].color}` }}
           >
-            {NOTES[n.code].short}
+            {noteShort(n.code)}
           </div>
         </motion.div>
       ))}
-      {rest > 0 && <span className="ml-3 font-mono text-xs text-white/50">+{rest} eventos</span>}
+      {rest > 0 && <span className="ml-3 font-mono text-xs text-white/50">{t('common.moreEvents', { n: rest })}</span>}
     </div>
   )
 }
