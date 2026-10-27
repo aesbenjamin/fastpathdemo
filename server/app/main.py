@@ -45,7 +45,7 @@ def health() -> dict:
         "neo4j": neo4j_ok,
         "backend": settings.backend,
         "agaConfigured": aga.configured,
-        "session": aga.status,
+        "session": aga.refresh_status() if settings.backend == "aga" and aga.configured else aga.status,
         "llm": llm.enabled(),
         "model": settings.openai_model if llm.enabled() else None,
         "fastpath": asdict(settings.fastpath("full")),
@@ -56,9 +56,9 @@ def health() -> dict:
 def warmup() -> dict:
     if settings.backend != "aga":
         return {"session": "not-used"}
-    if aga.status not in ("starting", "ready"):
+    # aga.session() confirms a cached session with the Aura API and recreates it when it is gone.
+    if aga.status != "starting":
         threading.Thread(target=aga.session, daemon=True).start()
-        aga.status = "starting"
     return {"session": aga.status}
 
 

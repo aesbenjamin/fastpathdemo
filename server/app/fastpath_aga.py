@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import threading
+import time
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
@@ -14,8 +16,11 @@ from .config import MODES, settings
 from . import db
 
 warnings.filterwarnings("ignore", message=".*preview feature.*")
+log = logging.getLogger(__name__)
 
 GRAPH_NAME = "music"
+# Aura deletes an idle session after its TTL; a "ready" session is re-checked at most this often.
+STATUS_CHECK_SECONDS = 30
 
 PROJECTION_QUERY = """
 CALL () {
@@ -48,27 +53,80 @@ class AgaBackend:
 
     def __init__(self) -> None:
         self._gds = None
+        self._sessions = None
         self._lock = threading.Lock()
+        self._checking = threading.Lock()
+        self._checked_at = 0.0
         self.status = "idle"
 
     @property
     def configured(self) -> bool:
         return bool(settings.aura_client_id and settings.aura_client_secret)
 
-    def session(self):
-        from graphdatascience.session import AuraAPICredentials, DbmsConnectionInfo, GdsSessions, SessionMemory
+    def _client(self):
+        from graphdatascience.session import AuraAPICredentials, GdsSessions
 
-        with self._lock:
-            if self._gds is not None:
-                return self._gds
-            if not self.configured:
-                raise RuntimeError("AURA_CLIENT_ID / AURA_CLIENT_SECRET não configurados")
-            self.status = "starting"
-            sessions = GdsSessions(
+        if self._sessions is None:
+            self._sessions = GdsSessions(
                 api_credentials=AuraAPICredentials(
                     settings.aura_client_id, settings.aura_client_secret, settings.aura_project_id
                 )
             )
+        return self._sessions
+
+    def _remote_status(self) -> str | None:
+        """Status reported by the Aura API for our session, or None when it no longer exists."""
+        for info in self._client().list():
+            if info.name == settings.session_name:
+                return info.status.lower()
+        return None
+
+    def _alive(self) -> bool:
+        try:
+            alive = self._remote_status() == "ready"
+        except Exception as exc:
+            # The Aura API itself is unreachable: keep the session and let the next call decide.
+            log.warning("Não foi possível consultar a sessão AGA: %s", exc)
+            return True
+        self._checked_at = time.monotonic()
+        return alive
+
+    def _forget(self) -> None:
+        self._gds = None
+        self.status = "idle"
+
+    def refresh_status(self) -> str:
+        """Current status; a 'ready' session is re-checked in the background so callers never wait on the Aura API."""
+        stale = time.monotonic() - self._checked_at > STATUS_CHECK_SECONDS
+        if self.status == "ready" and stale and self._checking.acquire(blocking=False):
+            threading.Thread(target=self._background_check, daemon=True).start()
+        return self.status
+
+    def _background_check(self) -> None:
+        try:
+            if not self._lock.acquire(blocking=False):
+                return
+            try:
+                if self._gds is not None and not self._alive():
+                    log.warning("Sessão AGA %s não existe mais (TTL ou falha)", settings.session_name)
+                    self._forget()
+            finally:
+                self._lock.release()
+        finally:
+            self._checking.release()
+
+    def session(self):
+        from graphdatascience.session import DbmsConnectionInfo, SessionMemory, SessionStatusError
+
+        with self._lock:
+            if self._gds is not None:
+                if self._alive():
+                    return self._gds
+                log.warning("Sessão AGA %s não existe mais; criando outra", settings.session_name)
+                self._forget()
+            if not self.configured:
+                raise RuntimeError("AURA_CLIENT_ID / AURA_CLIENT_SECRET não configurados")
+            self.status = "starting"
             if settings.aura_instance_id:
                 conn = DbmsConnectionInfo(
                     aura_instance_id=settings.aura_instance_id,
@@ -80,30 +138,60 @@ class AgaBackend:
                     uri=settings.neo4j_uri, username=settings.neo4j_user, password=settings.neo4j_password
                 )
             memory = getattr(SessionMemory, f"m_{settings.session_memory}", settings.session_memory)
-            try:
-                self._gds = sessions.get_or_create(
+
+            def get_or_create():
+                return self._client().get_or_create(
                     session_name=settings.session_name,
                     memory=memory,
                     db_connection=conn,
                     ttl=timedelta(minutes=settings.session_ttl_minutes),
                     arrow_client_options={"call_timeout": settings.arrow_call_timeout},
                 )
+
+            try:
+                try:
+                    self._gds = get_or_create()
+                except SessionStatusError:
+                    # A failed session with the same name blocks get_or_create: remove it and start a new one.
+                    log.warning("Sessão AGA %s está com falha; apagando e criando outra", settings.session_name)
+                    self._client().delete(session_name=settings.session_name)
+                    self._gds = get_or_create()
             except Exception:
                 self.status = "error"
                 raise
             self.status = "ready"
+            self._checked_at = time.monotonic()
             return self._gds
 
     def delete_session(self) -> bool:
+        """Deletes the session even when this process lost track of it (restart, TTL, earlier failure)."""
         with self._lock:
-            if self._gds is None:
+            try:
+                if self._gds is not None:
+                    return bool(self._gds.delete())
+                if self.configured:
+                    return bool(self._client().delete(session_name=settings.session_name))
                 return False
-            deleted = self._gds.delete()
-            self._gds = None
-            self.status = "idle"
-            return deleted
+            except Exception as exc:
+                log.warning("Falha ao encerrar a sessão AGA: %s", exc)
+                return False
+            finally:
+                self._forget()
 
     def run(
+        self, performances: list[dict], candidates: int, on_step: Callable[[str], None]
+    ) -> tuple[dict[str, dict[str, np.ndarray]], dict[str, list[tuple[str, str, float]]]]:
+        from graphdatascience.session import SessionStatusError
+
+        try:
+            return self._run(performances, candidates, on_step)
+        except SessionStatusError:
+            log.warning("Sessão AGA ficou indisponível durante a rodada; recriando e tentando de novo")
+            with self._lock:
+                self._forget()
+            return self._run(performances, candidates, on_step)
+
+    def _run(
         self, performances: list[dict], candidates: int, on_step: Callable[[str], None]
     ) -> tuple[dict[str, dict[str, np.ndarray]], dict[str, list[tuple[str, str, float]]]]:
         gds = self.session()
