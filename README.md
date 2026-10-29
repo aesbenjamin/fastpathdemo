@@ -21,6 +21,27 @@ O FastPath transforma cada sequência de eventos no tempo em um embedding. Com e
 
 O FastPath roda numa sessão do **Aura Graph Analytics** (`gds.fast_path.mutate`, preview). Sem chaves de API, ou se a sessão falhar, o servidor usa uma reimplementação local em NumPy (`FASTPATH_FALLBACK_LOCAL=true`) e o palco mostra o selo "FastPath local (simulado)".
 
+## Como rodar no dia a dia
+
+Com o [Setup](#setup) feito uma vez, a apresentação se resume a:
+
+1. **Suba o backend** no notebook:
+
+   ```bash
+   cd server && .venv/bin/uvicorn app.main:app --port 8000 --reload
+   ```
+
+2. **Abra o palco** no Chrome: [aesbenjamin.github.io/fastpathdemo/?api=http://localhost:8000#/palco](https://aesbenjamin.github.io/fastpathdemo/?api=http://localhost:8000#/palco). Para rodar o site localmente, use `cd web && npm run dev` e abra `http://127.0.0.1:5173/#/palco`.
+3. **Prepare na engrenagem** (canto do palco):
+   - *Aquecer sessão AGA*: cerca de 1 a 2 minutos. Se a sessão anterior expirou, o servidor percebe e cria outra.
+   - *Criar ecos robôs (36)*, se a galáxia estiver vazia. Faz o mesmo que o `scripts/seed.py`.
+   - *Limpar pessoas (mantém ecos)*, para começar do zero sem as melodias de uma demo anterior.
+4. **Escolha o idioma** com o botão PT/EN no topo ou a tecla `l`. O QR code leva o idioma junto.
+5. **Apresente** seguindo o [roteiro](#roteiro-da-apresentação-15-min). No ato 2, *Rodar FastPath* leva cerca de 1,5 minuto com ~80 melodias.
+6. **Depois do evento:** *Encerrar sessão AGA* na engrenagem, porque a sessão é cobrada enquanto existir. Se esquecer, a Aura apaga a sessão sozinha depois de 3 horas sem uso (`GDS_SESSION_TTL_MIN`, padrão 180).
+
+O selo "FastPath local (simulado)" no palco indica que o AGA não respondeu e o pipeline usou a reimplementação em NumPy. Rode de novo depois de aquecer a sessão.
+
 ## Setup
 
 ### 1. Aura
@@ -35,7 +56,7 @@ O FastPath roda numa sessão do **Aura Graph Analytics** (`gds.fast_path.mutate`
 cd server
 uv venv --python 3.12 && uv pip install -e .    # ou: python3.12 -m venv .venv && .venv/bin/pip install -e .
 cp .env.example .env                              # preencha Aura, AGA e (opcional) OpenAI
-.venv/bin/uvicorn app.main:app --port 8000
+.venv/bin/uvicorn app.main:app --port 8000 --reload
 ```
 
 Para usar o AGA, troque `FASTPATH_BACKEND=aga` e preencha `AURA_CLIENT_ID`, `AURA_CLIENT_SECRET` e `AURA_PROJECT_ID`. O project id é obrigatório quando a conta tem vários projetos. Para conferir tudo antes do evento (sessão, projeção, FastPath e KNN), rode:
@@ -44,9 +65,11 @@ Para usar o AGA, troque `FASTPATH_BACKEND=aga` e preencha `AURA_CLIENT_ID`, `AUR
 server/.venv/bin/python scripts/check_aga.py
 ```
 
-Tempos medidos com 38 melodias: cerca de 55 s para abrir a sessão, mais cerca de 40 s por rodada do pipeline (as duas chamadas do FastPath rodam em paralelo, cerca de 22 s). Sem `OPENAI_API_KEY` a demo funciona com textos de reserva baseados em regras.
+Tempos medidos: abrir a sessão leva cerca de 55 a 80 s. Uma rodada do pipeline leva cerca de 40 s com 38 melodias e cerca de 90 s com 78 (as duas chamadas do FastPath rodam em paralelo). Sem `OPENAI_API_KEY` a demo funciona com textos de reserva baseados em regras.
 
-Popular os "ecos" (36 bots em 6 arquétipos, para a galáxia não começar vazia):
+A sessão se chama `GDS_SESSION_NAME` (padrão `fastpath-music`) e a Aura a apaga depois de `GDS_SESSION_TTL_MIN` minutos sem uso (padrão 180). O servidor confere com a API da Aura se a sessão ainda existe: ao aquecer, a cada 30 s no status do palco e quando uma rodada falha. Se ela sumiu ou falhou, o servidor cria outra e repete a rodada.
+
+Popular os "ecos" (36 bots em 6 arquétipos, para a galáxia não começar vazia). O botão *Criar ecos robôs* na engrenagem do palco faz o mesmo:
 
 ```bash
 server/.venv/bin/python scripts/seed.py --per-archetype 6
@@ -67,7 +90,7 @@ npm install && npm run dev     # http://127.0.0.1:5173  |  palco: http://127.0.0
 3. Em *Settings > Secrets and variables > Actions*, crie os secrets `VITE_NEO4J_URI`, `VITE_NEO4J_USER` e `VITE_NEO4J_PASSWORD`.
 4. O workflow `.github/workflows/deploy.yml` publica `web/dist` a cada push.
 
-O palco pode rodar direto do Pages, falando com a API local: `https://<usuario>.github.io/<repo>/?api=http://localhost:8000#/palco`. O Chrome permite chamar `localhost` a partir de uma página https. Se preferir rodar o palco em `localhost`, defina `VITE_PUBLIC_URL` com a URL do Pages para o QR code apontar para o lugar certo.
+O palco pode rodar direto do Pages, falando com a API local: `https://<usuario>.github.io/<repo>/?api=http://localhost:8000#/palco` (neste repositório, `https://aesbenjamin.github.io/fastpathdemo/?api=http://localhost:8000#/palco`). O Chrome permite chamar `localhost` a partir de uma página https. Se preferir rodar o palco em `localhost`, defina `VITE_PUBLIC_URL` com a URL do Pages para o QR code apontar para o lugar certo.
 
 > A senha do Aura vai embutida no JavaScript público. É aceitável para uma demo descartável; apague ou troque a senha da instância depois do evento.
 
@@ -77,7 +100,7 @@ Atalhos do palco: `←` `→` ou `1`–`7` trocam de ato, `m` alterna o modo "no
 
 **Idioma (PT / EN):** o botão PT/EN no topo do palco e no celular troca toda a interface. O QR do Lobby leva o idioma atual do palco (`?lang=en`), então quem escaneia já abre no mesmo idioma, e cada pessoa ainda pode trocar no próprio celular. Os textos da IA (nomes e descrições das tribos, perfis, composições) são gerados nos dois idiomas a cada rodada do FastPath; a explicação do Duelo e as respostas do Pergunte são geradas no idioma escolhido. Resultados de rodadas anteriores a essa versão aparecem em português até o FastPath rodar de novo.
 
-**Antes de começar:** abra o palco e clique em *Aquecer sessão AGA* na engrenagem. A sessão leva alguns minutos para subir na primeira vez e cerca de 1 minuto para conectar depois. **Depois do evento:** clique em *Encerrar sessão AGA*, porque a sessão é cobrada enquanto existir.
+**Antes de começar:** abra o palco e clique em *Aquecer sessão AGA* na engrenagem. A sessão leva alguns minutos para subir na primeira vez e cerca de 1 a 2 minutos depois; se ela expirou, o servidor cria outra. Para uma plateia nova, use *Limpar pessoas (mantém ecos)*. **Depois do evento:** clique em *Encerrar sessão AGA*, porque a sessão é cobrada enquanto existir (sem isso, a Aura a apaga após 3 horas sem uso).
 
 | Ato | Tempo | O que fazer | O que dizer |
 |---|---|---|---|
