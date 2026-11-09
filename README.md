@@ -121,9 +121,10 @@ Ajustados com `scripts/tune.py` sobre os 6 arquétipos de bots e confirmados no 
 | Parâmetro | Valor | Por quê |
 |---|---|---|
 | `embedding_dimension` | 64 | Suficiente para ~100 melodias |
-| `num_time_anchors` | 20 (modo "só notas": 1) | Uma âncora por segundo da gravação de 20 s |
+| `num_time_anchors` | 20 | Uma âncora por segundo da gravação de 20 s |
 | `lookback_horizon` / `obsTime` | 20001 ms | Melodias alinhadas pelo início |
 | `smoothing_window` / `smoothing_rate` | 1 / 1÷espaçamento | Um evento "vaza" para a âncora vizinha |
+| modo "só notas" | 2 âncoras, horizonte 100×, sem suavização | Todo evento cai na primeira âncora e o tempo é ignorado. O AGA não aceita 1 âncora (divisão por zero) nem `smoothing_rate` sem janela |
 | `decay_rate` | 0 | Começo e fim da melodia pesam igual |
 
 ### Veredito do Duelo

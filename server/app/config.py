@@ -29,6 +29,8 @@ def _bool(name: str, default: bool) -> bool:
 # so elapsed time = OBSERVATION_TIME - t aligns all melodies by their first note.
 MAX_DURATION_MS = 20000
 OBSERVATION_TIME = MAX_DURATION_MS + 1
+# Horizon used by the "notes only" mode: with 2 anchors at 0 and this value, every event is closest to anchor 0.
+NOTES_ONLY_HORIZON = 100 * OBSERVATION_TIME
 
 
 @dataclass(frozen=True)
@@ -79,15 +81,23 @@ class Settings:
     score_weak_band: float = field(default_factory=lambda: _float("SCORE_WEAK_BAND", 0.15))
 
     def fastpath(self, mode: str) -> FastPathParams:
-        anchors = _int("FP_TIME_ANCHORS", 20) if mode == "full" else 1
-        horizon = _int("FP_LOOKBACK_HORIZON", OBSERVATION_TIME)
-        spacing = horizon / max(anchors - 1, 1)
+        if mode == "full":
+            anchors = _int("FP_TIME_ANCHORS", 20)
+            horizon = _int("FP_LOOKBACK_HORIZON", OBSERVATION_TIME)
+            spacing = horizon / max(anchors - 1, 1)
+            window = _int("FP_SMOOTHING_WINDOW", 1)
+            rate = _float("FP_SMOOTHING_RATE", round(1.0 / spacing, 6))
+        else:
+            # "Notes only" = a single time bucket. Aura Graph Analytics needs num_time_anchors >= 2 (one anchor
+            # divides by zero) and rejects a smoothing rate without a window, so use 2 anchors with a horizon far
+            # beyond any melody: every event lands on the first anchor and the embedding ignores time.
+            anchors, horizon, window, rate = 2, NOTES_ONLY_HORIZON, 0, 0.0
         return FastPathParams(
             embedding_dimension=_int("FP_DIMENSION", 64),
             num_time_anchors=anchors,
             lookback_horizon=horizon,
-            smoothing_rate=_float("FP_SMOOTHING_RATE", round(1.0 / spacing, 6)),
-            smoothing_window=_int("FP_SMOOTHING_WINDOW", 1) if mode == "full" else 0,
+            smoothing_rate=rate,
+            smoothing_window=window,
             decay_rate=_float("FP_DECAY_RATE", 0.0),
             random_seed=_int("FP_RANDOM_SEED", 42),
         )
